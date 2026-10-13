@@ -1,0 +1,7 @@
+.ace-s2o .ace_gutter,
+.ace-s2o .ace_gutter-cell {
+    background: transparent !important;
+}
+.ace-s2o .ace_print-margin {
+    display: none !important;
+}
