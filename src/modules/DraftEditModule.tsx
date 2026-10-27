@@ -1,66 +1,34 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { HoverTip } from "@/shared/HoverTip";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { CircleCheck, Loader2, Plus, Undo2 } from "lucide-react";
 import * as API from "@/orval/search2o";
-import { TraceType } from "@/orval/search2o.schemas";
-import type {
-    DraftResponseModel,
-    SaveDraftNewModel,
-    ValidateDraftModel,
-    ValidateDraftResponseModel,
-    ValidationResult,
-} from "@/orval/search2o.schemas";
+import type { DraftResponseModel, SaveDraftNewModel } from "@/orval/search2o.schemas";
+import { Button } from "@/components/ui/button";
 import { resetPagedList } from "@/shared/pagedList";
 import * as UI from "@/shared/uistate";
-import { BackButton } from "@/shared/BackButton";
-import { toast } from "sonner";
 import { useUnsavedWork } from "@/shared/sessionExpiry";
-import { Button } from "@/components/ui/button";
-import {
-    CheckCircle2,
-    CircleCheck,
-    Loader2,
-    Rocket,
-    Save,
-    Terminal,
-    Undo2,
-    XCircle,
-} from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { HoverTip } from "@/shared/HoverTip";
 import MonacoJsonc, { type MonacoJsoncHandle } from "@/shared/MonacoJsonc";
 import { tracePathToJsonPath } from "@/shared/agentPath";
-import { ValidationErrors } from "@/shared/ValidationErrors";
-import { useJsonStream } from "@/shared/useJsonStream";
-import { AskInputsForm, type AskBlockAnswers, type AskBlocks } from "@/shared/AskInputsForm";
-import { hasAskBlocks } from "@/shared/askBlocks";
-import { DraftQueryField } from "@/shared/DraftQueryField";
-import { runStartedConversation } from "@/shared/draftConversation";
 import { definitionHasAskCommand } from "@/shared/agentAskCommand";
-import { OutputCategoryFilter } from "@/shared/OutputCategoryFilter";
-import {
-    DEFAULT_OUTPUT_CATEGORIES,
-    OUTPUT_CATEGORY_INFO,
-    type OutputCategory,
-} from "@/shared/outputCategories";
-import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
 import { DraftAiPanel } from "@/shared/DraftAiPanel";
-import { DraftAssistTabs } from "@/shared/DraftAssistTabs";
 import { validationStatus } from "@/shared/validationStatus";
+import { ValidationBadge } from "@/shared/ValidationBadge";
+import { PaneTabs, TabCount } from "@/shared/PaneTabs";
 import { DraftUsedProfiles } from "@/shared/DraftUsedProfiles";
 import { MergeDraftDialog } from "@/shared/MergeDraftDialog";
-import { ReadyToPublishNotice } from "@/shared/ReadyToPublishNotice";
 import { PublishedDialog } from "@/shared/PublishedDialog";
+import { DraftHead } from "@/shared/DraftHead";
+import { DraftRunPanel } from "@/shared/DraftRunPanel";
+import { DraftUnavailable } from "@/shared/DraftUnavailable";
+import {
+    AskPublishDialog,
+    MetaChangedDialog,
+    UndoAiEditDialog,
+    UnsavedChangesDialog,
+} from "@/shared/DraftEditDialogs";
+import { useDraftValidation } from "@/shared/useDraftValidation";
+import { type AgentPart, limitText, parseLimits } from "@/shared/draftEdit";
 import {
     normalizeUsedProfiles,
     popAiUndo,
@@ -68,75 +36,50 @@ import {
     sameUsedProfiles,
     type UsedProfiles,
 } from "@/shared/draftHelpPrompt";
-import { unreachable } from "@/shared/orvalFetcher";
+import {
+    promptErrorTarget,
+    promptMap,
+    promptRows,
+    promptRowsError,
+    samePrompts,
+    type PromptRow,
+} from "@/shared/agentPrompts";
+import { DraftPrompts, type DraftPromptsHandle } from "@/shared/DraftPrompts";
+import { constKeys, constPayload, constText, sameConst } from "@/shared/agentConst";
+import { ConstError, DraftConst } from "@/shared/ConstFields";
 import { errorText } from "@/shared/apiError";
 import { uiText } from "@/shared/uiText";
-import { FieldLabel } from "@/shared/FieldLabel";
-import { useFieldHelp, useFieldTitle } from "@/shared/fieldHelp";
+import { useFieldTitle } from "@/shared/fieldHelp";
 import { AGENT_NAME, matchesRule } from "@/shared/schemaRules";
+import { useMediaQuery } from "@/shared/useMediaQuery";
+
 const BACK_FALLBACK = "Drafts";
-
-function limitText(value: number | null | undefined): string {
-    return value == null ? "" : String(value);
-}
-
-function parseLimits(
-    timeText: string,
-    costText: string,
-): { maxTime: number; maxCost: number } | { error: string } {
-    const time = Number(timeText.trim());
-    const cost = Number(costText.trim());
-    if (!timeText.trim() || !Number.isInteger(time) || time < 1) {
-        return { error: uiText("validate.maxTime") };
-    }
-    if (!costText.trim() || !Number.isFinite(cost) || cost <= 0) {
-        return { error: uiText("validate.maxCost") };
-    }
-    return { maxTime: time, maxCost: cost };
-}
 
 type PayloadType = {
     draftid?: string;
     create?: boolean;
 };
 
-type TraceKind = "trace" | "progress" | "data";
-
-type TraceItem = {
-    kind: TraceKind;
-    traceType?: TraceType;
-    node: ReactNode;
-    duration?: number;
-    path?: string;
-    id: number;
-};
-
-function formatTraceAge(ms: number): string {
-    return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
-}
-
 const SAVED_NOTICE_MS = 3000;
 
 export default function DraftEditModule() {
     const editorHandle = useRef<MonacoJsoncHandle>(null);
     const [savedAt, setSavedAt] = useState<number | null>(null);
-    const [assistMode, setAssistMode] = useState<"validate" | "ai">("ai");
+    const [agentTab, setAgentTab] = useState<AgentPart>("definition");
+    const [editorToolsEl, setEditorToolsEl] = useState<HTMLElement | null>(null);
+    const toolsInTabRow = useMediaQuery("(min-width: 640px)");
+    const runRef = useRef<HTMLDivElement>(null);
     const [aiBusy, setAiBusy] = useState(false);
     const [aiUndo, setAiUndo] = useState<string[]>([]);
     const [confirmAiUndo, setConfirmAiUndo] = useState(false);
-    const sawOutputRef = useRef(false);
-    const [traceItems, setTraceItems] = useState<TraceItem[]>([]);
-    const [shownCategories, setShownCategories] = useState<Set<OutputCategory>>(
-        () => new Set(DEFAULT_OUTPUT_CATEGORIES),
-    );
-    const [inConversation, setInConversation] = useState(false);
     const [confirmAskPublish, setConfirmAskPublish] = useState(false);
+    const [metaChanged, setMetaChanged] = useState<string[] | null>(null);
     const [usedProfiles, setUsedProfiles] = useState<UsedProfiles>({});
+    const [prompts, setPrompts] = useState<PromptRow[]>([]);
+    const promptsHandle = useRef<DraftPromptsHandle>(null);
+    const [agentConst, setAgentConst] = useState("");
+    const [constError, setConstError] = useState("");
     const [mergeOpen, setMergeOpen] = useState(false);
-    const [followupQuery, setFollowupQuery] = useState("");
-    const queryRef = useRef<HTMLDivElement>(null);
-    const pinQueryRef = useRef(false);
-    const errorBlockRef = useRef<HTMLDivElement>(null);
 
     const payload = UI.useModulePayload<PayloadType>() ?? {};
     const createdIdRef = useRef<string | null>(null);
@@ -145,6 +88,9 @@ export default function DraftEditModule() {
 
     const [loading, setLoading] = useState(true);
     const [pageState, setPageState] = useState<DraftResponseModel | null>(null);
+    const [loadFailure, setLoadFailure] = useState<{ draftid?: string; reason: string } | null>(
+        null,
+    );
 
     const [name, setName] = useState<string>("");
     const [title, setTitle] = useState<string>("");
@@ -152,20 +98,14 @@ export default function DraftEditModule() {
     const [tag, setTag] = useState<string>("general");
     const [maxTime, setMaxTime] = useState<string>("");
     const [maxCost, setMaxCost] = useState<string>("");
-    const fh = useFieldHelp("DraftResponseModel");
     const ft = useFieldTitle("DraftResponseModel");
     const [definitionText, setDefinitionText] = useState<string>("");
     const [validationQuery, setValidationQuery] = useState<string>("");
 
-    const [validationErrors, setValidationErrors] = useState<ValidationResult[] | null>(null);
-    const [runtimeError, setRuntimeError] = useState<string | null>(null);
     const [pendingNav, setPendingNav] = useState<{
         next: UI.ModuleKey;
         payload?: UI.ModulePayload;
     } | null>(null);
-    const [isValidating, setIsValidating] = useState(false);
-    const [pendingAsk, setPendingAsk] = useState<AskBlocks | null>(null);
-    const [askWithoutForm, setAskWithoutForm] = useState(false);
 
     const [postPublishPrompt, setPostPublishPrompt] = useState<{
         open: boolean;
@@ -184,6 +124,8 @@ export default function DraftEditModule() {
         definitionText: string;
         validationQuery: string;
         usedProfiles: UsedProfiles;
+        prompts: PromptRow[];
+        agentConst: string;
     }>({
         name: "",
         title: "",
@@ -193,60 +135,26 @@ export default function DraftEditModule() {
         definitionText: "",
         validationQuery: "",
         usedProfiles: {},
+        prompts: [],
+        agentConst: "",
     });
 
-    function addTraceElement(
-        kind: TraceKind,
-        content: string | ReactNode,
-        traceType?: TraceType,
-        meta?: { duration?: number; path?: string },
-    ) {
-        const toNode = (c: string | ReactNode, key: number) =>
-            typeof c === "string" ? (
-                <div key={key} className="font-mono text-xs whitespace-pre-wrap break-words">
-                    {c}
-                </div>
-            ) : kind === "data" ? (
-                <pre key={key} className="text-xs whitespace-pre-wrap font-mono">
-                    {c}
-                </pre>
-            ) : (
-                <div key={key} className="font-mono text-xs whitespace-pre-wrap break-words">
-                    {c}
-                </div>
-            );
-
-        const lines =
-            typeof content === "string"
-                ? kind === "data"
-                    ? [toNode(content, 0)]
-                    : content
-                          .split(/\r?\n/)
-                          .filter(Boolean)
-                          .map((ln, i) => toNode(ln, i))
-                : [toNode(content, 0)];
-
-        setTraceItems((prev) => [
-            ...prev,
-            ...lines.map((node) => ({
-                kind,
-                traceType,
-                node,
-                duration: meta?.duration,
-                path: meta?.path,
-                id: crypto.getRandomValues(new Uint32Array(1))[0],
-            })),
-        ]);
-
+    function revealTracePath(path: string) {
+        setAgentTab("definition");
         requestAnimationFrame(() => {
-            if (pinQueryRef.current) queryRef.current?.scrollIntoView({ block: "start" });
+            const jsonPath = tracePathToJsonPath(path, definitionText);
+            if (!jsonPath || !editorHandle.current?.revealJsonPath(jsonPath)) {
+                toast.info(`${path} is not in the definition any more.`);
+            }
         });
     }
 
-    function revealTracePath(path: string) {
-        const jsonPath = tracePathToJsonPath(path, definitionText);
-        if (!jsonPath || !editorHandle.current?.revealJsonPath(jsonPath)) {
-            toast.info(`${path} is not in the definition any more.`);
+    function revealErrorPath(path: string) {
+        const target = promptErrorTarget(path);
+        if (!target) return revealTracePath(path);
+        setAgentTab("prompts");
+        if (!promptsHandle.current?.reveal(target.name, target.field)) {
+            toast.info(`The prompt ${target.name} is not in this draft any more.`);
         }
     }
 
@@ -280,9 +188,13 @@ export default function DraftEditModule() {
         try {
             const resp = await API.getDraft({ draftid: id });
             if (!resp?.success) {
-                toast.warning(resp?.error?.message || "Failed to load draft");
+                setLoadFailure({
+                    draftid: id,
+                    reason: resp?.error?.message || "Failed to load draft",
+                });
                 setPageState(null);
             } else {
+                setLoadFailure(null);
                 setPageState(resp);
                 const loadedName = resp.draftName ?? (resp.isNewDraft ? "" : resp.draftid);
                 setName(loadedName);
@@ -299,6 +211,11 @@ export default function DraftEditModule() {
                 setValidationQuery(resp.validationQuery ?? "");
                 const loadedProfiles = normalizeUsedProfiles(resp.usedProfiles);
                 setUsedProfiles(loadedProfiles);
+                const loadedPrompts = promptRows(resp.agentPrompts);
+                setPrompts(loadedPrompts);
+                const loadedConst = constText(resp.const);
+                setAgentConst(loadedConst);
+                setConstError(resp.constError ?? "");
                 originalRef.current = {
                     name: loadedName,
                     title: resp.agentTitle ?? "",
@@ -308,10 +225,12 @@ export default function DraftEditModule() {
                     definitionText: defText,
                     validationQuery: resp.validationQuery ?? "",
                     usedProfiles: loadedProfiles,
+                    prompts: loadedPrompts,
+                    agentConst: loadedConst,
                 };
             }
         } catch (e) {
-            toast.warning(errorText(e, "Failed to load the draft."));
+            setLoadFailure({ draftid: id, reason: errorText(e, "Failed to load the draft.") });
             setPageState(null);
         } finally {
             setLoading(false);
@@ -334,23 +253,33 @@ export default function DraftEditModule() {
     const dirtyDefinition = definitionText !== originalRef.current.definitionText;
     const dirtyValidationQuery = validationQuery !== originalRef.current.validationQuery;
     const dirtyUsedProfiles = !sameUsedProfiles(usedProfiles, originalRef.current.usedProfiles);
+    const dirtyPrompts = !samePrompts(prompts, originalRef.current.prompts);
+    const dirtyConst = !sameConst(agentConst, originalRef.current.agentConst);
 
     const valuesRef = useRef({
         name,
         title,
         tag,
+        maxTime,
+        maxCost,
         definitionText,
         validationQuery,
         usedProfiles,
+        prompts,
+        agentConst,
         isNewDraft: false,
     });
     valuesRef.current = {
         name,
         title,
         tag,
+        maxTime,
+        maxCost,
         definitionText,
         validationQuery,
         usedProfiles,
+        prompts,
+        agentConst,
         isNewDraft: Boolean(pageState?.isNewDraft),
     };
 
@@ -361,9 +290,13 @@ export default function DraftEditModule() {
             (v.isNewDraft && v.name.trim() !== "" && v.name.trim() !== o.name) ||
             v.title !== o.title ||
             v.tag !== o.tag ||
+            v.maxTime.trim() !== o.maxTime ||
+            v.maxCost.trim() !== o.maxCost ||
             v.definitionText !== o.definitionText ||
             v.validationQuery !== o.validationQuery ||
-            !sameUsedProfiles(v.usedProfiles, o.usedProfiles)
+            !sameUsedProfiles(v.usedProfiles, o.usedProfiles) ||
+            !samePrompts(v.prompts, o.prompts) ||
+            !sameConst(v.agentConst, o.agentConst)
         );
     }, []);
 
@@ -450,7 +383,9 @@ export default function DraftEditModule() {
             dirtyLimits ||
             dirtyDefinition ||
             dirtyValidationQuery ||
-            dirtyUsedProfiles
+            dirtyUsedProfiles ||
+            dirtyPrompts ||
+            dirtyConst
         )) {
             return { success: true };
         }
@@ -460,6 +395,22 @@ export default function DraftEditModule() {
             if (limits && "error" in limits) {
                 toast.error(limits.error);
                 return { success: false };
+            }
+            if (dirtyPrompts) {
+                const problem = promptRowsError(prompts);
+                if (problem) {
+                    toast.error(problem);
+                    return { success: false };
+                }
+            }
+            let constValue: string | undefined;
+            if (dirtyConst) {
+                const result = constPayload(agentConst);
+                if ("error" in result) {
+                    toast.error(result.error);
+                    return { success: false };
+                }
+                constValue = result.value;
             }
             if (dirtyName) {
                 if (!matchesRule(AGENT_NAME, newName)) {
@@ -478,6 +429,8 @@ export default function DraftEditModule() {
                       ...(dirtyDefinition ? { agentDefinition: definitionText } : {}),
                       ...(dirtyValidationQuery ? { validationQuery } : {}),
                       ...(dirtyUsedProfiles ? { usedProfiles } : {}),
+                      ...(dirtyPrompts ? { agentPrompts: promptMap(prompts) } : {}),
+                      ...(constValue !== undefined ? { const: constValue } : {}),
                   })
                 : await API.saveDraftAgent({
                       draftid: pageState.draftid,
@@ -486,6 +439,8 @@ export default function DraftEditModule() {
                       ...(dirtyDefinition ? { agentDefinition: definitionText } : {}),
                       ...(dirtyValidationQuery ? { validationQuery } : {}),
                       ...(dirtyUsedProfiles ? { usedProfiles } : {}),
+                      ...(dirtyPrompts ? { agentPrompts: promptMap(prompts) } : {}),
+                      ...(constValue !== undefined ? { const: constValue } : {}),
                   });
 
             if (!resp?.success) {
@@ -502,9 +457,18 @@ export default function DraftEditModule() {
                 definitionText,
                 validationQuery,
                 usedProfiles,
+                prompts,
+                agentConst,
             };
 
             if (dirtyDefinition) setAiUndo([]);
+
+            if (dirtyConst) setConstError("");
+
+            if (limits) {
+                setMaxTime(String(limits.maxTime));
+                setMaxCost(String(limits.maxCost));
+            }
 
             resetPagedList("drafts");
             setSavedAt(Date.now());
@@ -545,7 +509,11 @@ export default function DraftEditModule() {
         dirtyDefinition,
         dirtyValidationQuery,
         dirtyUsedProfiles,
+        dirtyPrompts,
+        dirtyConst,
         usedProfiles,
+        prompts,
+        agentConst,
     ]);
 
     const saveBeforeAi = useCallback(
@@ -594,203 +562,52 @@ export default function DraftEditModule() {
         UI.openModule(pendingNav.next, pendingNav.payload);
     }, [pendingNav, saveChanges]);
 
-    const { start, cancel } = useJsonStream<ValidateDraftResponseModel>();
+    const run = useDraftValidation({ pageState, setPageState, validationQuery, saveChanges });
+    const { onValidate } = run;
 
-    const onValidate = useCallback(
-        async (answers?: AskBlockAnswers) => {
+    const publishNow = useCallback(
+        async (overwrite = false) => {
             if (!pageState) return;
-            if (!answers) {
-                if (inConversation && !followupQuery.trim()) {
-                    toast.error("Type a follow-up question, or start a new conversation.");
-                    return;
-                }
-                if (!inConversation && !validationQuery.trim()) {
-                    toast.error("Please provide a validation query");
-                    return;
-                }
-            }
 
             const saved = await saveChanges();
             if (!saved?.success) return;
 
-            if (!answers) {
-                sawOutputRef.current = false;
-                setTraceItems([]);
-                setValidationErrors([]);
-                setRuntimeError("");
-            }
-            const isFollowup = inConversation || !!answers;
-
-            if (!answers) setPendingAsk(null);
-            setAskWithoutForm(false);
-            setIsValidating(true);
-            pinQueryRef.current = true;
-            queryRef.current?.scrollIntoView({ block: "start" });
             try {
-                start({
-                    url: API.getValidateDraftStreamUrl(),
-                    body: {
-                        draftid: pageState.draftid,
-                        inputs: answers ?? (isFollowup ? { query: followupQuery.trim() } : {}),
-                        stream: true,
-                        followup: isFollowup,
-                    } satisfies ValidateDraftModel,
-                    onMessage: (m) => {
-                        if (m.type === "progress") {
-                            addTraceElement("progress", m.value);
-                        } else if (m.type === "trace") {
-                            addTraceElement(
-                                "trace",
-                                <span className="whitespace-pre-wrap break-words">
-                                    {m.value.message}
-                                </span>,
-                                m.traceType ?? TraceType.flow,
-                                { duration: m.value.duration, path: m.value.path || undefined },
-                            );
-                        } else if (m.type === "data") {
-                            sawOutputRef.current = true;
-                            addTraceElement("data", JSON.stringify(m.value, null, 2));
-                        } else if (m.type === "draft") {
-                            const resp = m.value;
-                            if (!resp?.success) {
-                                setIsValidating(false);
-                                if (resp?.resultCode === "unknownConversation") {
-                                    setPendingAsk(null);
-                                    setInConversation(false);
-                                }
-                                setRuntimeError(
-                                    resp?.error?.message || "The validation run failed.",
-                                );
-                                setPageState((prev) =>
-                                    prev
-                                        ? {
-                                              ...prev,
-                                              draftCompilationValidated: false,
-                                              draftExecutionValidated: false,
-                                          }
-                                        : prev,
-                                );
-                                return;
-                            }
-
-                            setInConversation(runStartedConversation(resp));
-                            setFollowupQuery("");
-
-                            if (resp.resultCode === "ask") {
-                                setIsValidating(false);
-                                const blocks = hasAskBlocks(resp.askInput) ? resp.askInput : null;
-                                setAskWithoutForm(!blocks);
-                                setPendingAsk(blocks);
-                                return;
-                            }
-
-                            setIsValidating(false);
-                            setPendingAsk(null);
-                            setAskWithoutForm(false);
-
-                            if (resp.validationSuccess) {
-                                setPageState((prev) =>
-                                    prev
-                                        ? {
-                                              ...prev,
-                                              draftCompilationValidated: true,
-                                              draftExecutionValidated: true,
-                                          }
-                                        : prev,
-                                );
-                                setValidationErrors(null);
-                                setRuntimeError(null);
-                                if (!sawOutputRef.current) {
-                                    addTraceElement("data", uiText("run.noOutput"));
-                                }
-                            } else {
-                                setPageState((prev) =>
-                                    prev
-                                        ? {
-                                              ...prev,
-                                              draftCompilationValidated: false,
-                                              draftExecutionValidated: false,
-                                          }
-                                        : prev,
-                                );
-                                setValidationErrors(
-                                    resp.validationErrors?.length ? resp.validationErrors : null,
-                                );
-                                setRuntimeError(resp.runtimeError || null);
-                            }
-                        }
-                    },
-                    onError: (err) => {
-                        setRuntimeError(errorText(err, unreachable()));
-                    },
-                    onClose: ({ cancelled }) => {
-                        pinQueryRef.current = false;
-                        setIsValidating(false);
-                        if (cancelled) {
-                            toast.info(uiText("draft.runCancelled"));
-                        }
-                    },
+                const resp = await API.publishDraft({
+                    draftid: pageState.draftid,
+                    ...(overwrite ? { overwrite } : {}),
                 });
+                if (!resp?.success && resp?.didMetaChange) {
+                    setMetaChanged(resp.metaFieldsChanged ?? []);
+                    return;
+                }
+                if (!resp?.success) {
+                    try {
+                        const check = await API.getDraft({ draftid: pageState.draftid });
+                        if (check?.success && check.draftAgentHasChanged) {
+                            setPageState((prev) =>
+                                prev ? { ...prev, draftAgentHasChanged: true } : prev,
+                            );
+                            setMergeOpen(true);
+                            return;
+                        }
+                    } catch {}
+                    toast.warning(resp?.error?.message || "Failed to publish draft");
+                    await fetchDraft();
+                    return;
+                }
+
+                resetPagedList("drafts");
+                setSavedAt(Date.now());
+                resetPagedList("agents");
+
+                setPostPublishPrompt({ open: true, isIndexed: resp.isIndexed === true });
             } catch (e) {
-                setIsValidating(false);
-                toast.warning(errorText(e, "Failed to validate the draft."));
+                toast.warning(errorText(e, "Failed to publish the draft."));
             }
         },
-        [pageState, validationQuery, followupQuery, saveChanges, start, inConversation],
+        [pageState, saveChanges, fetchDraft],
     );
-
-    const publishNow = useCallback(async () => {
-        if (!pageState) return;
-
-        if (
-            dirtyTitle ||
-            dirtyTag ||
-            dirtyLimits ||
-            dirtyDefinition ||
-            dirtyValidationQuery ||
-            dirtyUsedProfiles
-        ) {
-            const saved = await saveChanges();
-            if (!saved?.success) return;
-        }
-
-        try {
-            const resp = await API.publishDraft({ draftid: pageState.draftid });
-            if (!resp?.success) {
-                try {
-                    const check = await API.getDraft({ draftid: pageState.draftid });
-                    if (check?.success && check.draftAgentHasChanged) {
-                        setPageState((prev) =>
-                            prev ? { ...prev, draftAgentHasChanged: true } : prev,
-                        );
-                        setMergeOpen(true);
-                        return;
-                    }
-                } catch {}
-                toast.warning(resp?.error?.message || "Failed to publish draft");
-                await fetchDraft();
-                return;
-            }
-
-            resetPagedList("drafts");
-            setSavedAt(Date.now());
-            resetPagedList("agents");
-
-            setPostPublishPrompt({ open: true, isIndexed: resp.isIndexed === true });
-        } catch (e) {
-            toast.warning(errorText(e, "Failed to publish the draft."));
-        }
-    }, [
-        pageState,
-        dirtyTitle,
-        dirtyTag,
-        dirtyLimits,
-        dirtyDefinition,
-        dirtyValidationQuery,
-        dirtyUsedProfiles,
-        saveChanges,
-        fetchDraft,
-    ]);
 
     const onPublish = useCallback(async () => {
         if (!pageState) return;
@@ -832,7 +649,9 @@ export default function DraftEditModule() {
                 dirtyLimits ||
                 dirtyDefinition ||
                 dirtyValidationQuery ||
-                dirtyUsedProfiles
+                dirtyUsedProfiles ||
+                dirtyPrompts ||
+                dirtyConst
             ),
         [
             dirtyName,
@@ -842,6 +661,8 @@ export default function DraftEditModule() {
             dirtyDefinition,
             dirtyValidationQuery,
             dirtyUsedProfiles,
+            dirtyPrompts,
+            dirtyConst,
         ],
     );
     useEffect(() => {
@@ -854,7 +675,7 @@ export default function DraftEditModule() {
         return () => window.clearTimeout(timer);
     }, [savedAt]);
 
-    const disableValidate = isValidating || aiBusy;
+    const disableValidate = run.isValidating || aiBusy;
     const draftValidated = Boolean(
         pageState?.draftCompilationValidated && pageState?.draftExecutionValidated,
     );
@@ -863,52 +684,6 @@ export default function DraftEditModule() {
         !draftValidated ||
         !title?.trim() ||
         (Boolean(pageState?.isNewDraft) && !(pageState?.draftName || name.trim()));
-
-    const categoryOf = (item: TraceItem): OutputCategory =>
-        item.traceType ?? (item.kind === "progress" ? "progress" : "data");
-
-    const categoryCounts = useMemo(() => {
-        const counts: Partial<Record<OutputCategory, number>> = {};
-        for (const item of traceItems) {
-            const key = categoryOf(item);
-            counts[key] = (counts[key] ?? 0) + 1;
-        }
-        return counts;
-    }, [traceItems]);
-
-    const visibleTraceItems = useMemo(
-        () => traceItems.filter((item) => shownCategories.has(categoryOf(item))),
-        [traceItems, shownCategories],
-    );
-
-    const hiddenTraceCount = traceItems.length - visibleTraceItems.length;
-
-    const toggleCategory = useCallback((category: OutputCategory) => {
-        setShownCategories((prev) => {
-            const next = new Set(prev);
-            if (next.has(category)) next.delete(category);
-            else next.add(category);
-            return next;
-        });
-    }, []);
-
-    const showAllCategories = useCallback(
-        () => setShownCategories(new Set(DEFAULT_OUTPUT_CATEGORIES)),
-        [],
-    );
-
-    const hideAllCategories = useCallback(() => setShownCategories(new Set()), []);
-
-    const hasValidationOutput =
-        traceItems.length > 0 || !!runtimeError || !!validationErrors?.length;
-    const runHasOutput =
-        hasValidationOutput || isValidating || askWithoutForm || Boolean(pendingAsk);
-
-    const clearValidationOutput = () => {
-        setTraceItems([]);
-        setRuntimeError(null);
-        setValidationErrors(null);
-    };
 
     useEffect(() => {
         const onKey = (e: globalThis.KeyboardEvent) => {
@@ -923,26 +698,6 @@ export default function DraftEditModule() {
         return () => window.removeEventListener("keydown", onKey);
     }, [disableValidate, onValidate]);
 
-    useEffect(() => {
-        const release = () => {
-            pinQueryRef.current = false;
-        };
-        window.addEventListener("wheel", release, { passive: true });
-        window.addEventListener("touchmove", release, { passive: true });
-        return () => {
-            window.removeEventListener("wheel", release);
-            window.removeEventListener("touchmove", release);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (!runtimeError && !validationErrors?.length) return;
-        const t = window.setTimeout(() => {
-            errorBlockRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-        }, 200);
-        return () => window.clearTimeout(t);
-    }, [runtimeError, validationErrors]);
-
     if (loading) {
         return (
             <div className="flex items-center justify-center h-[60vh] text-muted-foreground">
@@ -953,153 +708,82 @@ export default function DraftEditModule() {
     }
 
     if (!pageState) {
-        return (
-            <div className="flex items-center justify-center h-[60vh] text-muted-foreground">
-                Unable to load draft.
-            </div>
-        );
+        return <DraftUnavailable {...(loadFailure ?? { reason: "Unable to load draft." })} />;
     }
 
     const draftAgentName = pageState.draftName || (pageState.isNewDraft ? "" : pageState.draftid);
-    const draftHeading = draftAgentName ? `Draft - ${draftAgentName}` : "Draft";
+
+    const status = validationStatus({
+        running: run.isValidating,
+        failed: run.failed,
+        validated: draftValidated,
+    });
+    const validateTip = aiBusy ? uiText("draft.tabs.waitForAi") : "Ctrl+Enter / ⌘⏎";
+
+    const readyNoticeShown = !disablePublish && disableSave && !run.isValidating && !aiBusy;
+
+    const keysInConst = constKeys(agentConst);
+    const promptsProblem = promptRowsError(prompts);
+    const limits = parseLimits(maxTime, maxCost);
 
     return (
         <>
-            <Card className="shadow-sm">
-                <CardHeader className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-                    <div className="min-w-0 space-y-1">
-                        <ModuleCardTitle title={draftHeading} help="draft-edit" />
-                    </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={saveChanges}
-                            disabled={disableSave}
-                        >
-                            <Save className="mr-2 h-4 w-4" />
-                            Save
-                        </Button>
+            <div className="space-y-5">
+                <DraftHead
+                    isNewDraft={Boolean(pageState.isNewDraft)}
+                    agentName={draftAgentName}
+                    name={name}
+                    onNameChange={(next) => {
+                        setName(next);
+                        if (!titleTouchedRef.current) setTitle(next);
+                    }}
+                    tag={tag}
+                    onTagChange={setTag}
+                    title={title}
+                    onTitleChange={(next) => {
+                        titleTouchedRef.current = true;
+                        setTitle(next);
+                    }}
+                    maxTime={maxTime}
+                    maxCost={maxCost}
+                    onMaxTimeChange={setMaxTime}
+                    onMaxCostChange={setMaxCost}
+                    limitsInvalid={"error" in limits}
+                    saveDisabled={disableSave}
+                    onSave={() => void saveChanges()}
+                    publishDisabled={disablePublish}
+                    publishFilled={!disablePublish && !readyNoticeShown}
+                    onPublish={() => void onPublish()}
+                    backFallback={BACK_FALLBACK}
+                />
 
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={onPublish}
-                            disabled={disablePublish}
-                        >
-                            <Rocket className="mr-2 h-4 w-4" />
-                            Publish
-                        </Button>
-
-                        <BackButton fallback={BACK_FALLBACK} label="Back" />
-                    </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                    <div className="flex max-w-4xl flex-col gap-4 sm:flex-row">
-                        <div className="sm:w-52">
-                            <HoverTip
-                                tip={pageState?.isNewDraft ? undefined : uiText("agent.nameLocked")}
-                            >
-                                <Label htmlFor="agent-name" className="text-sm">
-                                    Agent name
-                                </Label>
-                            </HoverTip>
-                            <Input
-                                id="agent-name"
-                                className="mt-1"
-                                value={name}
-                                onChange={(e) => {
-                                    setName(e.target.value);
-                                    if (!titleTouchedRef.current) setTitle(e.target.value);
-                                }}
-                                disabled={!pageState?.isNewDraft}
-                                spellCheck={false}
-                            />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <Label htmlFor="title" className="text-sm">
-                                Title
-                            </Label>
-                            <Input
-                                id="title"
-                                className="mt-1"
-                                value={title}
-                                onChange={(e) => {
-                                    titleTouchedRef.current = true;
-                                    setTitle(e.target.value);
-                                }}
-                                placeholder={uiText("placeholder.draftTitle")}
-                            />
-                        </div>
-                        <div className="sm:w-40">
-                            <HoverTip
-                                tip={pageState?.isNewDraft ? undefined : uiText("agent.tagLocked")}
-                            >
-                                <Label htmlFor="tag" className="text-sm">
-                                    Agent tag
-                                </Label>
-                            </HoverTip>
-                            <Input
-                                id="tag"
-                                className="mt-1"
-                                value={tag}
-                                onChange={(e) => setTag(e.target.value)}
-                                placeholder="general"
-                                disabled={!pageState?.isNewDraft}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-4 sm:flex-row">
-                        <div className="sm:min-w-36">
-                            <FieldLabel
-                                help={fh("maxTime")}
-                                htmlFor="maxTime"
-                                className="whitespace-nowrap"
-                            >
-                                {ft("maxTime", "Max run time (seconds)")}
-                            </FieldLabel>
-                            <Input
-                                id="maxTime"
-                                className="mt-1 tabular-nums"
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                step={1}
-                                value={maxTime}
-                                onChange={(e) => setMaxTime(e.target.value)}
-                            />
-                        </div>
-                        <div className="sm:min-w-36">
-                            <FieldLabel
-                                help={fh("maxCost")}
-                                htmlFor="maxCost"
-                                className="whitespace-nowrap"
-                            >
-                                {ft("maxCost", "Max LLM cost per run (US dollars)")}
-                            </FieldLabel>
-                            <Input
-                                id="maxCost"
-                                className="mt-1 tabular-nums"
-                                type="number"
-                                inputMode="decimal"
-                                min={0}
-                                step="any"
-                                value={maxCost}
-                                onChange={(e) => setMaxCost(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                                <Label className="text-sm">Agent definition</Label>
+                <div className="overflow-clip rounded-xl border bg-card shadow-sm">
+                    <PaneTabs
+                        idPrefix="agent"
+                        label="Parts of the agent"
+                        value={agentTab}
+                        onChange={setAgentTab}
+                        tabs={[
+                            {
+                                id: "const",
+                                label: ft("const", "Const"),
+                                badge: <TabCount n={keysInConst?.length ?? 0} />,
+                                problem: keysInConst === null || Boolean(constError),
+                            },
+                            {
+                                id: "prompts",
+                                label: "Prompts",
+                                badge: <TabCount n={prompts.length} />,
+                                problem: promptsProblem !== null,
+                            },
+                            { id: "definition", label: "Definition" },
+                        ]}
+                        end={
+                            <div className="flex items-center gap-1">
                                 {savedAt !== null ? (
                                     <span
                                         role="status"
-                                        className="animate-in fade-in inline-flex items-center gap-1.5 text-xs text-muted-foreground duration-200"
+                                        className="animate-in fade-in mr-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground duration-200"
                                     >
                                         <CircleCheck
                                             className="h-3.5 w-3.5 text-primary"
@@ -1108,291 +792,154 @@ export default function DraftEditModule() {
                                         Saved
                                     </span>
                                 ) : null}
+                                {agentTab === "definition" && aiUndo.length > 0 ? (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        onClick={() =>
+                                            dirtyDefinition
+                                                ? setConfirmAiUndo(true)
+                                                : void undoAiEdit()
+                                        }
+                                    >
+                                        <Undo2 className="h-3.5 w-3.5" aria-hidden />
+                                        Undo AI edit
+                                        <span className="text-muted-foreground">
+                                            ({aiUndo.length})
+                                        </span>
+                                    </Button>
+                                ) : null}
+                                {toolsInTabRow && agentTab === "definition" ? (
+                                    <div ref={setEditorToolsEl} />
+                                ) : null}
+                                {agentTab === "prompts" ? (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        aria-label="Add prompt"
+                                        onClick={() => promptsHandle.current?.add()}
+                                    >
+                                        <Plus className="h-3.5 w-3.5" aria-hidden />
+                                        <span className="hidden sm:inline">Add prompt</span>
+                                    </Button>
+                                ) : null}
+                                <span
+                                    aria-hidden
+                                    className="mx-1.5 hidden h-5 w-px bg-border sm:block"
+                                />
+                                <HoverTip tip="Go to the validation run">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            runRef.current?.scrollIntoView({
+                                                block: "start",
+                                                behavior: "smooth",
+                                            })
+                                        }
+                                        aria-label="Validation status — go to the validation run"
+                                        className="hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
+                                    >
+                                        <ValidationBadge status={status} />
+                                    </button>
+                                </HoverTip>
                             </div>
-                            {aiUndo.length > 0 ? (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={() =>
-                                        dirtyDefinition ? setConfirmAiUndo(true) : void undoAiEdit()
-                                    }
-                                >
-                                    <Undo2 className="h-3.5 w-3.5" aria-hidden />
-                                    Undo AI edit
-                                    <span className="text-muted-foreground">({aiUndo.length})</span>
-                                </Button>
-                            ) : null}
-                        </div>
+                        }
+                    />
+                    <div
+                        id="agent-panel-const"
+                        role="tabpanel"
+                        aria-labelledby="agent-tab-const"
+                        hidden={agentTab !== "const"}
+                        className="min-h-72 bg-surface"
+                    >
+                        <p className="px-4 pt-3 text-xs text-muted-foreground">
+                            {uiText("const.help")}
+                        </p>
+                        {constError ? (
+                            <div className="px-4 pt-3">
+                                <ConstError
+                                    error={constError}
+                                    consequence={uiText("const.replaceOnSave")}
+                                />
+                            </div>
+                        ) : null}
+                        <DraftConst value={agentConst} onChange={setAgentConst} />
+                    </div>
+                    <div
+                        id="agent-panel-prompts"
+                        role="tabpanel"
+                        aria-labelledby="agent-tab-prompts"
+                        hidden={agentTab !== "prompts"}
+                        className="min-h-72"
+                    >
+                        <p className="border-b px-4 py-3 text-xs text-muted-foreground">
+                            {uiText("prompt.intro")}
+                        </p>
+                        <DraftPrompts ref={promptsHandle} value={prompts} onChange={setPrompts} />
+                    </div>
+                    <div
+                        id="agent-panel-definition"
+                        role="tabpanel"
+                        aria-labelledby="agent-tab-definition"
+                        hidden={agentTab !== "definition"}
+                        className="min-h-72 bg-surface pt-2 pb-2"
+                    >
+                        {toolsInTabRow ? null : (
+                            <div
+                                ref={setEditorToolsEl}
+                                className="-mt-2 mb-2 flex justify-end border-b px-2 py-1"
+                            />
+                        )}
                         <MonacoJsonc
                             ref={editorHandle}
                             value={definitionText}
                             onChange={(v: string) => setDefinitionText(v ?? "")}
-                            readOnly={false}
+                            readOnly={aiBusy}
+                            framed={false}
+                            toolbarTarget={editorToolsEl}
                         />
                     </div>
 
-                    <div className="overflow-hidden rounded-2xl border bg-surface">
-                        <DraftAssistTabs
-                            mode={assistMode}
-                            onModeChange={setAssistMode}
-                            aiBusy={aiBusy}
-                            validation={validationStatus({
-                                running: isValidating,
-                                failed: Boolean(runtimeError || validationErrors?.length),
-                                validated: draftValidated,
-                            })}
+                    <div className="sticky bottom-0 z-10 border-t bg-card/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+                        <DraftAiPanel
+                            draftid={pageState.draftid}
+                            onBeforeSend={saveBeforeAi}
+                            onBusyChange={setAiBusy}
+                            onReplace={onAiReplace}
+                            blockedReason={
+                                run.isValidating ? uiText("draft.tabs.waitForValidation") : null
+                            }
+                            profiles={
+                                <DraftUsedProfiles
+                                    value={usedProfiles}
+                                    onChange={setUsedProfiles}
+                                    disabled={aiBusy}
+                                />
+                            }
                         />
-                        <div
-                            id="draft-panel-validate"
-                            role="tabpanel"
-                            aria-labelledby="draft-tab-validate"
-                            hidden={assistMode !== "validate"}
-                        >
-                            <div ref={queryRef} className="flex items-end gap-2 p-4 scroll-mt-16">
-                                <div className="min-w-0 flex-1">
-                                    <DraftQueryField
-                                        inConversation={inConversation}
-                                        validationQuery={validationQuery}
-                                        followupQuery={followupQuery}
-                                        disabled={isValidating}
-                                        onValidationQueryChange={setValidationQuery}
-                                        onFollowupQueryChange={setFollowupQuery}
-                                        onStartOver={() => {
-                                            setInConversation(false);
-                                            setFollowupQuery("");
-                                        }}
-                                    />
-                                </div>
-                                <HoverTip tip="Ctrl+Enter / ⌘⏎">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => void onValidate()}
-                                        disabled={disableValidate}
-                                    >
-                                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                                        Validate/Trace
-                                    </Button>
-                                </HoverTip>
-                            </div>
-
-                            {!disablePublish && disableSave && !isValidating && !aiBusy ? (
-                                <ReadyToPublishNotice onPublish={() => void onPublish()} />
-                            ) : null}
-
-                            {runHasOutput ? (
-                                <div className="divide-y border-t">
-                                    {askWithoutForm ? (
-                                        <div className="bg-amber-500/10 px-4 py-3 text-sm">
-                                            This agent paused to ask the user for input, so the
-                                            validation run stopped there — it has not failed. The
-                                            response carried no form, so the answers cannot be
-                                            supplied from here; run the published agent, or
-                                            re-validate once the server returns the question.
-                                        </div>
-                                    ) : null}
-
-                                    {pendingAsk ? (
-                                        <div className="p-4">
-                                            <AskInputsForm
-                                                askInput={pendingAsk}
-                                                agentName={pageState?.draftName ?? null}
-                                                disabled={isValidating}
-                                                onSubmit={(answers) => void onValidate(answers)}
-                                            />
-                                        </div>
-                                    ) : null}
-
-                                    {validationErrors?.length || runtimeError ? (
-                                        <div
-                                            ref={errorBlockRef}
-                                            className="space-y-3 bg-destructive/5 p-4"
-                                        >
-                                            {validationErrors?.length ? (
-                                                <ValidationErrors
-                                                    errors={validationErrors}
-                                                    onOpenPath={revealTracePath}
-                                                    onOpenAllowlist={() =>
-                                                        UI.openModule("AllowlistConfig")
-                                                    }
-                                                />
-                                            ) : null}
-                                            {runtimeError ? (
-                                                <div>
-                                                    <div className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
-                                                        <XCircle className="h-3.5 w-3.5" />
-                                                        Runtime error
-                                                    </div>
-                                                    <div className="mt-1.5 break-words text-sm text-destructive">
-                                                        {runtimeError}
-                                                    </div>
-                                                </div>
-                                            ) : null}
-                                        </div>
-                                    ) : null}
-
-                                    {hasValidationOutput || isValidating ? (
-                                        <div>
-                                            <div className="flex h-9 items-center gap-2 border-b bg-muted/40 px-3">
-                                                <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
-                                                <span className="text-xs font-medium">
-                                                    Validation output
-                                                </span>
-                                                {traceItems.length > 0 ? (
-                                                    <span className="text-[11px] text-muted-foreground">
-                                                        {visibleTraceItems.length}{" "}
-                                                        {visibleTraceItems.length === 1
-                                                            ? "event"
-                                                            : "events"}
-                                                        {hiddenTraceCount > 0 ? (
-                                                            <span className="opacity-70">
-                                                                {" "}
-                                                                · {hiddenTraceCount} hidden
-                                                            </span>
-                                                        ) : null}
-                                                    </span>
-                                                ) : null}
-                                                <span className="flex-1" />
-                                                {isValidating ? (
-                                                    <div className="inline-flex items-center gap-2 rounded-md border bg-muted/40 py-1.5 pl-3 pr-1 text-xs text-muted-foreground shadow-sm">
-                                                        <span
-                                                            className="inline-flex gap-1"
-                                                            aria-hidden="true"
-                                                        >
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/70 animate-pulse" />
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/70 animate-pulse [animation-delay:150ms]" />
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/70 animate-pulse [animation-delay:300ms]" />
-                                                        </span>
-                                                        <span>Validating</span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={cancel}
-                                                            className="rounded px-2 py-0.5 font-medium text-destructive transition-colors hover:bg-destructive/10"
-                                                        >
-                                                            Stop
-                                                        </button>
-                                                    </div>
-                                                ) : null}
-                                                {!isValidating && hasValidationOutput ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={clearValidationOutput}
-                                                        className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                                                    >
-                                                        Clear
-                                                    </button>
-                                                ) : null}
-                                            </div>
-                                            {traceItems.length > 0 ? (
-                                                <div className="border-b bg-muted/20 px-3 py-2">
-                                                    <OutputCategoryFilter
-                                                        selected={shownCategories}
-                                                        counts={categoryCounts}
-                                                        onToggle={toggleCategory}
-                                                        onShowAll={showAllCategories}
-                                                        onHideAll={hideAllCategories}
-                                                    />
-                                                </div>
-                                            ) : null}
-
-                                            <div className="space-y-1.5 p-3">
-                                                {traceItems.length ===
-                                                0 ? null : visibleTraceItems.length === 0 ? (
-                                                    <div className="py-8 text-center text-xs text-muted-foreground">
-                                                        Every category is hidden.{" "}
-                                                        {traceItems.length}{" "}
-                                                        {traceItems.length === 1
-                                                            ? "event is"
-                                                            : "events are"}{" "}
-                                                        still here — tick a category above, or use
-                                                        “Show all”.
-                                                    </div>
-                                                ) : (
-                                                    visibleTraceItems.map((item) => {
-                                                        const { label, tone, Icon } =
-                                                            OUTPUT_CATEGORY_INFO[categoryOf(item)];
-
-                                                        return (
-                                                            <div
-                                                                key={item.id}
-                                                                className="flex items-start gap-2 text-sm"
-                                                            >
-                                                                <HoverTip tip={label}>
-                                                                    <span
-                                                                        className={
-                                                                            "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] " +
-                                                                            tone
-                                                                        }
-                                                                    >
-                                                                        <Icon className="h-3 w-3" />
-                                                                    </span>
-                                                                </HoverTip>
-
-                                                                <span className="mt-0.5 w-12 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-                                                                    {item.duration != null
-                                                                        ? formatTraceAge(
-                                                                              item.duration,
-                                                                          )
-                                                                        : ""}
-                                                                </span>
-
-                                                                <div className="min-w-0 flex-1">
-                                                                    {item.node}
-                                                                </div>
-
-                                                                {item.path ? (
-                                                                    <HoverTip
-                                                                        tip={`${item.path} — click to show it in the definition`}
-                                                                    >
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() =>
-                                                                                revealTracePath(
-                                                                                    item.path!,
-                                                                                )
-                                                                            }
-                                                                            className="mt-0.5 hidden max-w-[14rem] shrink-0 truncate rounded font-mono text-[11px] text-muted-foreground/80 underline-offset-2 transition-colors hover:text-foreground hover:underline md:block"
-                                                                        >
-                                                                            {item.path}
-                                                                        </button>
-                                                                    </HoverTip>
-                                                                ) : null}
-                                                            </div>
-                                                        );
-                                                    })
-                                                )}
-                                            </div>
-                                        </div>
-                                    ) : null}
-                                </div>
-                            ) : null}
-                        </div>
-
-                        <div
-                            id="draft-panel-ai"
-                            role="tabpanel"
-                            aria-labelledby="draft-tab-ai"
-                            hidden={assistMode !== "ai"}
-                        >
-                            <DraftAiPanel
-                                draftid={pageState.draftid}
-                                onBeforeSend={saveBeforeAi}
-                                onBusyChange={setAiBusy}
-                                onReplace={onAiReplace}
-                                profiles={
-                                    <DraftUsedProfiles
-                                        value={usedProfiles}
-                                        onChange={setUsedProfiles}
-                                        disabled={aiBusy}
-                                    />
-                                }
-                            />
-                        </div>
                     </div>
-                </CardContent>
-            </Card>
+
+                    <DraftRunPanel
+                        ref={runRef}
+                        run={run}
+                        status={status}
+                        validationQuery={validationQuery}
+                        onValidationQueryChange={setValidationQuery}
+                        runDisabled={disableValidate}
+                        runTip={validateTip}
+                        readyToPublish={readyNoticeShown}
+                        onPublish={() => void onPublish()}
+                        agentName={pageState.draftName ?? null}
+                        onOpenErrorPath={revealErrorPath}
+                        onOpenTracePath={revealTracePath}
+                        onOpenAllowlist={() => UI.openModule("AllowlistConfig")}
+                    />
+                </div>
+            </div>
 
             <MergeDraftDialog
                 open={mergeOpen}
@@ -1402,95 +949,31 @@ export default function DraftEditModule() {
                 onMerged={onMerged}
             />
 
-            <AlertDialog open={confirmAiUndo} onOpenChange={setConfirmAiUndo}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Undo the last AI edit?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Your unsaved changes to the definition will be discarded, and the draft
-                            will be saved as it was before that edit.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Keep my changes</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => {
-                                setConfirmAiUndo(false);
-                                void undoAiEdit();
-                            }}
-                        >
-                            Undo
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            <AlertDialog
+            <UndoAiEditDialog
+                open={confirmAiUndo}
+                onOpenChange={setConfirmAiUndo}
+                onUndo={() => void undoAiEdit()}
+            />
+            <MetaChangedDialog
+                fields={metaChanged}
+                onClose={() => setMetaChanged(null)}
+                onReplace={() => void publishNow(true)}
+            />
+            <AskPublishDialog
                 open={confirmAskPublish}
-                onOpenChange={(open) => {
-                    if (!open) setConfirmAskPublish(false);
-                }}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            Publishing will break questions people are answering
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            The published version of this agent can pause to ask the user a
-                            question. Anyone — not just you — whose conversation is waiting on one
-                            of those questions will not be able to answer it once this version
-                            replaces it; their run cannot be resumed and the question is lost. They
-                            can start the conversation again afterwards.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Don’t publish</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => {
-                                setConfirmAskPublish(false);
-                                void publishNow();
-                            }}
-                        >
-                            Publish anyway
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            <AlertDialog
+                onOpenChange={setConfirmAskPublish}
+                onPublish={() => void publishNow()}
+            />
+            <UnsavedChangesDialog
                 open={pendingNav !== null}
-                onOpenChange={(open) => {
-                    if (!open) stayHere();
-                }}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This draft has unsaved changes. Save them before leaving, or discard
-                            them?
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Keep editing</AlertDialogCancel>
-                        <Button variant="outline" onClick={discardAndLeave}>
-                            Discard changes
-                        </Button>
-                        <AlertDialogAction
-                            onClick={(e) => {
-                                e.preventDefault();
-                                void saveAndLeave();
-                            }}
-                        >
-                            Save and leave
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                onStay={stayHere}
+                onDiscard={discardAndLeave}
+                onSave={() => void saveAndLeave()}
+            />
 
             <PublishedDialog
                 open={postPublishPrompt.open}
+                agentName={pageState.draftName || pageState.draftid}
                 isIndexed={postPublishPrompt.isIndexed}
                 onIndex={() => {
                     setPostPublishPrompt({ open: false, isIndexed: false });

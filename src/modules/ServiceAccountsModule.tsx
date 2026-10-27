@@ -285,7 +285,7 @@ export default function ServiceAccountsModule() {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <div className="hidden h-5 lg:block" aria-hidden />
+                        <div className="hidden h-3.5 lg:block" aria-hidden />
                         <Button type="submit" className="gap-2" disabled={!nameValid || creating}>
                             {creating ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />

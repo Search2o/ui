@@ -23,6 +23,7 @@ import type { GetLicenseResponseModel, FrozenInfoResponseModel } from "@/orval/s
 import { errorText } from "@/shared/apiError";
 import { uiText } from "@/shared/uiText";
 import { rotationRefusal, rotationSummary } from "@/shared/encryptionRotation";
+import { fmtLocalShort } from "@/shared/commonFuncs";
 
 const freezeText = () => uiText("help.freeze");
 
@@ -178,7 +179,7 @@ export default function LicenseModule() {
         if (!frozenState?.frozenAt) return null;
         try {
             const d = new Date(frozenState.frozenAt);
-            return isNaN(d.getTime()) ? frozenState.frozenAt : d.toLocaleString();
+            return isNaN(d.getTime()) ? frozenState.frozenAt : fmtLocalShort(d);
         } catch {
             return frozenState.frozenAt;
         }
@@ -254,7 +255,7 @@ export default function LicenseModule() {
     const oldExpiryLocal = useMemo(() => {
         if (!oldExpiryMs) return "";
         try {
-            return new Date(oldExpiryMs).toLocaleString();
+            return fmtLocalShort(oldExpiryMs);
         } catch {
             return "";
         }
@@ -264,7 +265,7 @@ export default function LicenseModule() {
         const ms = model?.licenseCreatedAt;
         if (!ms) return "";
         try {
-            return new Date(ms).toLocaleString();
+            return fmtLocalShort(ms);
         } catch {
             return "";
         }
@@ -274,7 +275,7 @@ export default function LicenseModule() {
         const ms = model?.oldLicenseCreatedAt;
         if (!ms) return "";
         try {
-            return new Date(ms).toLocaleString();
+            return fmtLocalShort(ms);
         } catch {
             return "";
         }
@@ -484,9 +485,7 @@ export default function LicenseModule() {
                                                     license to{" "}
                                                     <strong>
                                                         {expireAtLocal
-                                                            ? new Date(
-                                                                  expireAtLocal,
-                                                              ).toLocaleString()
+                                                            ? fmtLocalShort(expireAtLocal)
                                                             : "the selected time"}
                                                     </strong>{" "}
                                                     (local time). Do you want to proceed?

@@ -1,5 +1,5 @@
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import * as COMMON from "@/shared/commonFuncs";
+import { HoverTip } from "@/shared/HoverTip";
 import { cn } from "@/lib/utils";
 
 type VersionLike = {
@@ -30,16 +30,9 @@ export function UpdatedBy<T extends VersionLike>({ obj, className, compact = fal
         <div className={cn("truncate text-xs text-muted-foreground", className)}>
             {(hasName || hasEmail) &&
                 (compact && tooltipText ? (
-                    <TooltipProvider delayDuration={150}>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span className="cursor-help">{label}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{tooltipText}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                    <HoverTip tip={tooltipText}>
+                        <span className="cursor-help">{label}</span>
+                    </HoverTip>
                 ) : (
                     <span>{label}</span>
                 ))}

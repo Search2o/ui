@@ -205,7 +205,7 @@ export function IntegrationTokens({ maxAgeDays }: { maxAgeDays: number | null | 
 
                 <div className="grid gap-2 sm:max-w-xl">
                     <div className="flex flex-wrap items-end gap-2">
-                        <div className="grid min-w-0 flex-1 gap-2">
+                        <div className="grid min-w-48 flex-1 gap-2">
                             <Label htmlFor="integration-token-name">New token name</Label>
                             <Input
                                 id="integration-token-name"

@@ -1,5 +1,3 @@
-export type AssistMode = "ai" | "validate";
-
 export type ValidationStatus = "validating" | "failed" | "validated" | "notValidated";
 
 export function validationStatus({

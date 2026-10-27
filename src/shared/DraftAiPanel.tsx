@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import * as API from "@/orval/search2o";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { HoverTip } from "@/shared/HoverTip";
+import { Composer } from "@/shared/Composer";
 import { errorText } from "@/shared/apiError";
 import { DRAFT_HELP_MAX, DRAFT_HELP_MIN } from "@/shared/draftHelpPrompt";
 import { uiText } from "@/shared/uiText";
@@ -17,12 +17,14 @@ export function DraftAiPanel({
     onReplace,
     onBusyChange,
     profiles,
+    blockedReason,
 }: {
     draftid: string;
     profiles?: ReactNode;
     onBeforeSend: () => Promise<boolean>;
     onReplace: (definition: string) => void;
     onBusyChange?: (busy: boolean) => void;
+    blockedReason?: string | null;
 }) {
     const [prompt, setPrompt] = useState("");
     const [busy, setBusy] = useState(false);
@@ -42,7 +44,7 @@ export function DraftAiPanel({
     const tooShort = prompt.trim().length < DRAFT_HELP_MIN;
 
     const send = useCallback(async () => {
-        if (tooShort || busy) return;
+        if (tooShort || busy || blockedReason) return;
         setBusy(true);
         setError(null);
         try {
@@ -65,16 +67,23 @@ export function DraftAiPanel({
         } finally {
             setBusy(false);
         }
-    }, [tooShort, busy, onBeforeSend, draftid, prompt, onReplace]);
+    }, [tooShort, busy, blockedReason, onBeforeSend, draftid, prompt, onReplace]);
+
+    const note = error
+        ? null
+        : busy
+          ? uiText("aiAssist.working")
+          : tooShort && prompt
+            ? uiText("aiAssist.tooShort")
+            : null;
 
     return (
-        <div data-ai-assist className="space-y-3 p-4">
-            {profiles}
-            <Textarea
+        <div data-ai-assist className="space-y-2">
+            <Composer
                 id="ai-assist-prompt"
                 aria-label={uiText("aiAssist.inputLabel")}
-                rows={4}
-                className="min-h-28 bg-background text-sm placeholder:text-xs"
+                rows={1}
+                className="field-sizing-content max-h-48 min-h-9"
                 placeholder={uiText("aiAssist.placeholder")}
                 value={prompt}
                 maxLength={DRAFT_HELP_MAX}
@@ -86,41 +95,46 @@ export function DraftAiPanel({
                     }
                 }}
                 disabled={busy}
+                options={
+                    <>
+                        <span className="inline-flex shrink-0 items-center gap-1 px-1 text-xs font-medium text-primary">
+                            <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                            Write with AI
+                        </span>
+                        {profiles}
+                    </>
+                }
+                action={
+                    <HoverTip
+                        tip={blockedReason ?? "Ctrl+Enter / ⌘⏎"}
+                        wrap={Boolean(blockedReason)}
+                    >
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void send()}
+                            disabled={busy || tooShort || Boolean(blockedReason)}
+                        >
+                            {busy ? (
+                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                            ) : (
+                                <Sparkles className="h-4 w-4" aria-hidden />
+                            )}
+                            {busy ? "Writing…" : "Send"}
+                        </Button>
+                    </HoverTip>
+                }
             />
-            <div className="flex flex-wrap items-center gap-2">
-                <HoverTip tip="Ctrl+Enter / ⌘⏎">
-                    <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void send()}
-                        disabled={busy || tooShort}
-                    >
-                        {busy ? (
-                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                        ) : (
-                            <Sparkles className="h-4 w-4" aria-hidden />
-                        )}
-                        {busy ? "Writing…" : "Send"}
-                    </Button>
-                </HoverTip>
-                <span className="text-xs text-muted-foreground">
-                    {tooShort && prompt ? uiText("aiAssist.tooShort") : ""}
-                </span>
-                {busy ? (
-                    <span className="text-xs text-muted-foreground">
-                        {uiText("aiAssist.working")}
-                    </span>
-                ) : null}
-                {replacedAt !== null ? (
-                    <span
-                        role="status"
-                        className="animate-in fade-in inline-flex items-center gap-1.5 text-xs text-muted-foreground duration-200"
-                    >
-                        <CircleCheck className="h-3.5 w-3.5 text-primary" aria-hidden />
-                        {uiText("aiAssist.replaced")}
-                    </span>
-                ) : null}
-            </div>
+            {note ? <p className="px-1 text-xs text-muted-foreground">{note}</p> : null}
+            {replacedAt !== null ? (
+                <p
+                    role="status"
+                    className="animate-in fade-in flex items-center gap-1.5 px-1 text-xs text-muted-foreground duration-200"
+                >
+                    <CircleCheck className="h-3.5 w-3.5 text-primary" aria-hidden />
+                    {uiText("aiAssist.replaced")}
+                </p>
+            ) : null}
             {error ? (
                 <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" aria-hidden />

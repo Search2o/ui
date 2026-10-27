@@ -2,6 +2,8 @@ import { useSyncExternalStore } from "react";
 
 export type IndexKind = "index" | "remove";
 
+export const INDEXING_TIMEOUT_MS = 15 * 60 * 1000;
+
 export type IndexingJob = {
     agentName: string;
     kind: IndexKind;
@@ -14,6 +16,7 @@ export type IndexingOutcome = {
     ok: boolean;
     rejected?: boolean;
     message: string;
+    quiet?: boolean;
     tookMs: number;
 };
 
@@ -48,7 +51,8 @@ export function startIndexing(
             result = { ok: false, message: "Indexing failed." };
         }
         running = running.filter((j) => j.startedAt !== startedAt);
-        finished = [...finished, { ...job, ...result, tookMs: Date.now() - startedAt }];
+        if (!result.quiet)
+            finished = [...finished, { ...job, ...result, tookMs: Date.now() - startedAt }];
         announce();
     })();
 }

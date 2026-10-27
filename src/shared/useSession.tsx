@@ -74,6 +74,7 @@ type SessionContextShape = {
     signOut: () => Promise<string | null>;
 
     setAccountName: React.Dispatch<React.SetStateAction<string>>;
+    setServiceLevel: React.Dispatch<React.SetStateAction<string | null>>;
     setUser: React.Dispatch<React.SetStateAction<UserProfileModel | null>>;
 };
 
@@ -277,6 +278,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             signOut,
             setUser,
             setAccountName,
+            setServiceLevel,
         }),
         [
             user,

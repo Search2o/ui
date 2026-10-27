@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Search2o
  * Search2o Agent Server
- * OpenAPI spec version: 0.10.2
+ * OpenAPI spec version: 0.2.0
  */
 /**
  * Structured details about the error, when there are any.
@@ -46,6 +46,8 @@ export interface AccountModel {
   serviceLevel?: ServiceLevel;
   /** When this account began paying, in epoch milliseconds. Empty until the account moves to a paid plan. */
   billingStartAt?: number | null;
+  /** Whether this account can move to a paid plan now. When false, startPaidService is refused. */
+  paidServiceAvailable?: boolean;
   /** Account creation date in epoch milliseconds. */
   createdAt: number;
 }
@@ -110,7 +112,6 @@ export const AgentConfigPart = {
   api: 'api',
   mcp: 'mcp',
   db: 'db',
-  prompt: 'prompt',
 } as const;
 
 export interface AgentConfigPartRequestModel {
@@ -315,6 +316,11 @@ export interface DbConnectionPool {
   maxOverflow?: number;
   /** Arguments passed straight through to the database driver. Certificate files belong here. */
   connectArgs?: DbConnectionPoolConnectArgs;
+  /**
+     * Close a pool and its connections after it has not been used for this many seconds. 0 keeps it open until the profile changes.
+     * @minimum 0
+     */
+  idleTimeout?: number;
 }
 
 export interface DbConnectionModel {
@@ -333,34 +339,16 @@ export interface DbConnectionModel {
   doc?: string;
   /** Identifies which configuration part this is. */
   type?: 'db';
-  /** The database connection string. It must specify an async driver installed in your Python environment: sqlite+aiosqlite, mysql+aiomysql, postgresql+asyncpg or oracle+oracledb. */
+  /** The database connection string. It must specify an async driver installed in your Python environment: sqlite+aiosqlite, mysql+aiomysql, postgresql+asyncpg or oracle+oracledb. When it comes out different from the one a pool was opened with, for example after a password is rotated, that pool is closed and a new one opened. */
   connectionString?: ExprString | null;
+  /** Leave empty to share one connection pool across every run that uses this profile. If the connection string differs per user, for example because each user connects with their own credentials, set this to an expression that tells them apart, such as { sys.userEmail }, so each gets their own pool. */
+  poolKey?: ExprString | null;
   /** Pool settings for connections to this database. */
   connectionPool?: DbConnectionPool;
 }
 
-export interface PromptProfileModel {
-  /**
-     * The name this profile is referred to by, in agents and in other configuration.
-     * @maxLength 50
-     * @pattern ^[A-Za-z][A-Za-z0-9_]*[A-Za-z0-9]$
-     */
-  name: string;
-  /**
-     * Free-text notes about this profile, for whoever maintains the configuration.
-     * @maxLength 500
-     */
-  doc?: string;
-  /** Identifies which configuration part this is. */
-  type?: 'prompt';
-  /** The system prompt. Usually set once per conversation. Stored encrypted; Search2o Cloud never holds the text. */
-  system?: string | null;
-  /** The user prompt. Can be set many times; those set before one LLM call are merged into a single string. Stored encrypted; Search2o Cloud never holds the text. */
-  user?: string | null;
-}
-
 export interface AgentConfigPartRowModel {
-  configValue: LlmModel | ApiServerModel | McpServerModel | DbConnectionModel | PromptProfileModel;
+  configValue: LlmModel | ApiServerModel | McpServerModel | DbConnectionModel;
   configVersion: number;
   lastUpdatedByName: string;
   lastUpdatedByEmail: string;
@@ -742,23 +730,6 @@ export interface TextPartApi {
 }
 
 /**
- * Identifies this part as HTML.
- */
-export type HtmlPartApiContentType = typeof HtmlPartApiContentType[keyof typeof HtmlPartApiContentType];
-
-
-export const HtmlPartApiContentType = {
-  html: 'html',
-} as const;
-
-export interface HtmlPartApi {
-  /** Identifies this part as HTML. */
-  contentType: HtmlPartApiContentType;
-  /** The HTML of this part. */
-  text: string;
-}
-
-/**
  * Identifies this part as an image.
  */
 export type ImagePartApiContentType = typeof ImagePartApiContentType[keyof typeof ImagePartApiContentType];
@@ -772,12 +743,12 @@ export interface ImagePartApi {
   /** Identifies this part as an image. */
   contentType: ImagePartApiContentType;
   /** The image, base64 encoded. */
-  text: string;
+  data: string;
   /** The image's MIME type, such as image/png. */
   mimeType?: string;
 }
 
-export type ContentPartApi = TextPartApi | HtmlPartApi | ImagePartApi;
+export type ContentPartApi = TextPartApi | ImagePartApi;
 
 export interface AgentOutput {
   agentName?: string;
@@ -843,6 +814,36 @@ export interface AgentPerformanceReportResponseModel {
   report: AgentPerformanceReportModel;
 }
 
+/**
+ * @pattern ^(?:\{[\x20-\x7E\t\r\n]*\}|[^{][\s\S]*|\{(?:[\s\S]*[^}])?|)$
+ */
+export type PromptText = string;
+
+export type PromptScope = typeof PromptScope[keyof typeof PromptScope];
+
+
+export const PromptScope = {
+  conversation: 'conversation',
+  agent: 'agent',
+  local: 'local',
+} as const;
+
+export interface AgentPromptModel {
+  /** The system prompt. It must evaluate to text. */
+  system?: PromptText | null;
+  /** The user prompt. Evaluated at each LLM call that uses this prompt. It must evaluate to text, a content part ({contentType: text|image}), or a list of them. */
+  user?: PromptText | null;
+  /** How long the prompt's history is kept. */
+  scope?: PromptScope;
+  /** What the prompt is for. Shown to draft help in place of the prompt's text. */
+  doc?: string | null;
+}
+
+/**
+ * The agent's prompts, by name. They are not versioned: a past version is returned without them.
+ */
+export type AgentResponseModelAgentPrompts = {[key: string]: AgentPromptModel};
+
 export interface DescriptorModel {
   /**
      * What this agent does. This determines how well an agent matches a search query entered by the user. If this is empty, the agent will not be matched to any query.
@@ -864,6 +865,8 @@ export interface AgentResponseModel {
   agentTag: string;
   /** Agent definition in JSON. */
   agentDefinition: string;
+  /** The agent's prompts, by name. They are not versioned: a past version is returned without them. */
+  agentPrompts?: AgentResponseModelAgentPrompts;
   /** Whether this agent has past versions in the last three months. */
   hasPastVersions: boolean;
   /** Name of the user who last updated the agent definition. */
@@ -878,14 +881,16 @@ export interface AgentResponseModel {
   isLocked?: boolean;
   /** The labels this agent stores memories under. Deleting the agent deletes every user's memories under these labels. */
   memoryLabels?: string[];
-  /** The published agents that invoke this agent. The agent cannot be deleted while this is not empty. */
-  invokedBy?: string[];
   /** What the agent does, which is what a search matches a user's query against. Empty when the agent has no descriptor. */
   descriptor?: DescriptorModel;
   /** Seconds a run of this agent may take before it is stopped. */
   maxTime?: number | null;
   /** US dollars of LLM spend a run of this agent may reach before it is stopped. */
   maxCost?: number | null;
+  /** The agent's const as a plaintext JSON object string, decrypted for the editor. Empty when unset. Exposed to the agent as the read-only 'const' namespace. */
+  const?: string;
+  /** Set when the stored const could not be decrypted, with the reason. const is then empty, and saving a const replaces the stored one. */
+  constError?: string;
   /** When anything an agent server uses about this agent last changed - its definition, title, tag or run limits - in epoch milliseconds. */
   lastChanged?: number | null;
   /** Version of the descriptor, in epoch milliseconds. Send it back with publishDescriptor. It is 0 when the agent has no descriptor. */
@@ -1000,6 +1005,11 @@ export interface AgentServerModel {
   cloudPool?: ConnectionPoolModel;
   /** A free form JSON configuration that is sent to the UI from the getUiConfig call. */
   uiConfig?: AgentServerModelUiConfig;
+  /**
+     * When this agent server shuts down, how many seconds agents that are still running get to finish before they are stopped. Changing this needs an agent server restart.
+     * @minimum 0
+     */
+  shutdownGrace?: number;
 }
 
 /**
@@ -1029,7 +1039,10 @@ export interface AgentValidationModel {
      * @minimum 0
      */
   maxIterationLoops?: number;
-  /** How many iterations a loop runs before yielding, so the runtime limit can be checked. */
+  /**
+     * How many iterations a loop runs before yielding, so the runtime limit can be checked.
+     * @minimum 1
+     */
   yieldLoopsAfter?: number;
   /** The most rows a single db command may return. */
   dbMaxRows?: number;
@@ -1153,6 +1166,8 @@ export const AuditEntryType = {
   failedSignIns: 'failedSignIns',
   titleUpdated: 'titleUpdated',
   budgetUpdated: 'budgetUpdated',
+  agentPublished: 'agentPublished',
+  promptsUpdated: 'promptsUpdated',
   unknownPasswordReset: 'unknownPasswordReset',
   agentServer: 'agentServer',
   servers: 'servers',
@@ -1170,7 +1185,6 @@ export const AuditEntryType = {
   api: 'api',
   mcp: 'mcp',
   db: 'db',
-  prompt: 'prompt',
 } as const;
 
 /**
@@ -1507,7 +1521,12 @@ export const EncryptionSource = {
 } as const;
 
 export interface EncryptionKey {
-  /** The name the key is referred to by. */
+  /**
+     * The name your encryptionKey hook looks the key up by, such as my-key, alias/my-key or a key ARN. Letters, digits and _ . - : /, starting and ending with a letter or digit, up to 256 characters.
+     * @minLength 1
+     * @maxLength 256
+     * @pattern ^[A-Za-z0-9](?:[A-Za-z0-9_.:/-]*[A-Za-z0-9])?$
+     */
   keyName: string;
   /** When the key was created, in epoch milliseconds. */
   createdAt: number;
@@ -1553,11 +1572,11 @@ export interface HooksModel {
   onStart?: string | null;
   /** Called when the agent server shuts down normally. It is not called if the process is killed. If it raises, the message is logged. */
   onEnd?: string | null;
-  /** Called before a top-level agent runs, with isNewConversation and startFromAsk. It is not called for agents that another agent invokes. If it raises, the agent stops. */
+  /** Called before an agent runs, with isNewConversation and startFromAsk. If it raises, the agent stops. */
   onAgentStart?: string | null;
-  /** Called after a top-level agent finishes successfully or pauses to ask, with endWithAsk, before the run is recorded. It is not called for agents that another agent invokes. If it raises, the agent fails. */
+  /** Called after an agent finishes successfully or pauses to ask, with endWithAsk, before the run is recorded. If it raises, the agent fails. */
   onAgentEnd?: string | null;
-  /** Called after a top-level agent fails, before the run is recorded. It is not called for agents that another agent invokes. If it raises, its message is reported as the error. */
+  /** Called after an agent fails, before the run is recorded. If it raises, its message is reported as the error. */
   onAgentError?: string | null;
   /** Called after an agent is published, with its name, version, definition, title, tag and the publisher's email. If it raises, the caller gets an error that says the agent was published. */
   onAgentPublish?: string | null;
@@ -1826,6 +1845,11 @@ export interface DraftHelpResponseModel {
 }
 
 /**
+ * The prompts the agent will have when this draft is published, by name.
+ */
+export type DraftResponseModelAgentPrompts = {[key: string]: AgentPromptModel};
+
+/**
  * The configuration profiles this draft would use, as profile type to names. It is a hint for writing the agent, and can go out of date as the draft is edited.
  */
 export type DraftResponseModelUsedProfiles = {[key: string]: string[]};
@@ -1847,6 +1871,8 @@ export interface DraftResponseModel {
   draftUpdatedAt?: number;
   /** The agent definition, as JSON. */
   agentDefinition?: string | null;
+  /** The prompts the agent will have when this draft is published, by name. */
+  agentPrompts?: DraftResponseModelAgentPrompts;
   /** Whether the agent has been published by another user, after this draft was created (changes should be merged before the draft can be published). */
   draftAgentHasChanged?: boolean;
   /** The query the draft is run against to validate it. */
@@ -1863,6 +1889,10 @@ export interface DraftResponseModel {
   maxTime?: number | null;
   /** US dollars of LLM spend a run of this draft's agent may reach before it is stopped. */
   maxCost?: number | null;
+  /** The agent's const as a plaintext JSON object string, decrypted for the editor. Empty when unset. Exposed to the agent as the read-only 'const' namespace. */
+  const?: string;
+  /** Set when the stored const could not be decrypted, with the reason. const is then empty, and saving a const replaces the stored one. */
+  constError?: string;
 }
 
 export interface DraftidModel {
@@ -2093,7 +2123,7 @@ export interface GetDraftListModel {
   /**
      * The maximum number of results to return.
      * @minimum 1
-     * @maximum 25
+     * @maximum 1000
      */
   limit?: number;
 }
@@ -2479,7 +2509,7 @@ export interface ProfileInfoModel {
 }
 
 /**
- * The configured profiles, grouped by type: llm, api, mcp, db and prompt. Each entry carries the profile's name and its documentation.
+ * The configured profiles, grouped by type: llm, api, mcp and db. Each entry carries the profile's name and its documentation.
  */
 export type ProfilesResponseModelProfiles = {[key: string]: ProfileInfoModel[]};
 
@@ -2488,7 +2518,7 @@ export interface ProfilesResponseModel {
   success?: boolean;
   /** Included in the response if the request was unsuccessful. */
   error?: ErrorResponseModel | null;
-  /** The configured profiles, grouped by type: llm, api, mcp, db and prompt. Each entry carries the profile's name and its documentation. */
+  /** The configured profiles, grouped by type: llm, api, mcp and db. Each entry carries the profile's name and its documentation. */
   profiles?: ProfilesResponseModelProfiles;
 }
 
@@ -2512,6 +2542,12 @@ export interface PublishDescriptorResponseModel {
   validationError?: string;
 }
 
+export interface PublishDraftModel {
+  draftid: string;
+  /** Replace the agent's title, run limits and prompts with the draft's even if they were changed on the agent after the draft was made from it. */
+  overwrite?: boolean;
+}
+
 export interface PublishDraftResponseModel {
   /** Included in every response. Specifies whether the request was successful. */
   success?: boolean;
@@ -2519,6 +2555,10 @@ export interface PublishDraftResponseModel {
   error?: ErrorResponseModel | null;
   /** Whether the published agent is currently in the search index. */
   isIndexed?: boolean;
+  /** True when the publish was refused because the agent's title, run limits or prompts were changed after the draft was made from it. Publish again with overwrite to replace them with the draft's. */
+  didMetaChange?: boolean;
+  /** With didMetaChange, the fields that differ between the draft and the agent: agentTitle, maxTime, maxCost, and agentPrompts.<name> for each prompt. */
+  metaFieldsChanged?: string[];
 }
 
 export interface ReportWindow {
@@ -2578,6 +2618,11 @@ export interface RotateServiceAccountKeyResponseModel {
  */
 export type SaveDraftAgentModelUsedProfiles = {[key: string]: string[]} | null;
 
+/**
+ * The agent's prompts, by name. Each llm command names one of them. This replaces all of the draft's prompts. Omit to leave unchanged.
+ */
+export type SaveDraftAgentModelAgentPrompts = { [key: string]: unknown } | null;
+
 export interface SaveDraftAgentModel {
   /** Draft to update. For a draft of an existing agent this is the agent name. */
   draftid: string;
@@ -2593,12 +2638,21 @@ export interface SaveDraftAgentModel {
   maxTime?: number | null;
   /** US dollars of LLM spend a run of this agent may reach before it is stopped. Omit to leave unchanged. */
   maxCost?: number | null;
+  /** The agent's prompts, by name. Each llm command names one of them. This replaces all of the draft's prompts. Omit to leave unchanged. */
+  agentPrompts?: SaveDraftAgentModelAgentPrompts;
+  /** The agent's const, as a plaintext JSON object string. The agent server encrypts it before storing. It is decrypted to a JSON object and exposed to the agent as the read-only 'const' namespace. Omit to leave unchanged; '' to clear. */
+  const?: string | null;
 }
 
 /**
  * The configuration profiles this draft would use, as profile type to names. It is a hint for writing the agent, and can go out of date as the draft is edited. Omit to leave unchanged.
  */
 export type SaveDraftNewModelUsedProfiles = {[key: string]: string[]} | null;
+
+/**
+ * The agent's prompts, by name. Each llm command names one of them. This replaces all of the draft's prompts. Omit to leave unchanged.
+ */
+export type SaveDraftNewModelAgentPrompts = { [key: string]: unknown } | null;
 
 export interface SaveDraftNewModel {
   /** Draft to update. */
@@ -2619,6 +2673,10 @@ export interface SaveDraftNewModel {
   maxTime?: number | null;
   /** US dollars of LLM spend a run of this agent may reach before it is stopped. Omit to leave unchanged. */
   maxCost?: number | null;
+  /** The agent's prompts, by name. Each llm command names one of them. This replaces all of the draft's prompts. Omit to leave unchanged. */
+  agentPrompts?: SaveDraftNewModelAgentPrompts;
+  /** The agent's const, as a plaintext JSON object string. The agent server encrypts it before storing. It is decrypted to a JSON object and exposed to the agent as the read-only 'const' namespace. Omit to leave unchanged; '' to clear. */
+  const?: string | null;
 }
 
 export interface SearchModel {
@@ -2789,6 +2847,7 @@ export const ValidationResultType = {
   error: 'error',
   secret: 'secret',
   allowlistItem: 'allowlistItem',
+  constItem: 'constItem',
 } as const;
 
 export interface ValidationResult {
@@ -2855,7 +2914,6 @@ export const TraceType = {
   input: 'input',
   output: 'output',
   tool: 'tool',
-  invoke: 'invoke',
   agent: 'agent',
   error: 'error',
 } as const;
@@ -3024,7 +3082,7 @@ export interface UpdateUserProfileModel {
 }
 
 export interface UpsertAgentConfigPartModel {
-  configValue: LlmModel | ApiServerModel | McpServerModel | DbConnectionModel | PromptProfileModel;
+  configValue: LlmModel | ApiServerModel | McpServerModel | DbConnectionModel;
   configVersion: number;
 }
 

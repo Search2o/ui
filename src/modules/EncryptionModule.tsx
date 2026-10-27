@@ -28,6 +28,8 @@ import { Save, Plus, Trash2, ChevronDown, ChevronRight, KeyRound, Webhook } from
 import * as UI from "@/shared/uistate";
 import { UpdatedBy } from "@/shared/UpdatedBy";
 import { uiText } from "@/shared/uiText";
+import { fmtLocalShort } from "@/shared/commonFuncs";
+import { ENCRYPTION_KEY_NAME, matchesRule } from "@/shared/schemaRules";
 
 type EncryptionKeyRow = EncryptionKey & {
     id: string;
@@ -52,14 +54,32 @@ const rowsToKeys = (rows: EncryptionKeyRow[]): EncryptionKey[] =>
         createdAt,
     }));
 
+const keyNameError = (name: string): string | null =>
+    name.trim() && !matchesRule(ENCRYPTION_KEY_NAME, name)
+        ? uiText("validate.encryptionKeyNameRule")
+        : null;
+
+function KeyNameError({ id, name }: { id: string; name: string }) {
+    const error = keyNameError(name);
+    return error ? (
+        <p id={id} className="text-xs text-destructive">
+            {error}
+        </p>
+    ) : null;
+}
+
 const formatCreatedAt = (value: number) => {
     if (!value) return "—";
     const ms = value < 10_000_000_000 ? value * 1000 : value;
     const dt = new Date(ms);
-    return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleString();
+    return Number.isNaN(dt.getTime()) ? "—" : fmtLocalShort(dt);
 };
 
-export function EncryptionSection() {
+export function EncryptionSection({
+    onDirtyChange,
+}: {
+    onDirtyChange?: (dirty: boolean) => void;
+} = {}) {
     const fh = useFieldHelp("EncryptionModel", "EncryptionKey");
     const [res, setRes] = useState<ConfigPartResponseModel | null>(null);
     const [loading, setLoading] = useState(true);
@@ -70,12 +90,12 @@ export function EncryptionSection() {
     const [keyRows, setKeyRows] = useState<EncryptionKeyRow[]>([]);
     const [showPreviousKeys, setShowPreviousKeys] = useState(false);
 
-    useUnsavedWork(
-        () =>
-            JSON.stringify(configPart) !== JSON.stringify(res?.configValue) ||
-            JSON.stringify(keyRows) !==
-                JSON.stringify(keysToRows((res?.configValue as EncryptionModel | undefined)?.keys)),
-    );
+    const dirty =
+        JSON.stringify(configPart) !== JSON.stringify(res?.configValue) ||
+        JSON.stringify(keyRows) !==
+            JSON.stringify(keysToRows((res?.configValue as EncryptionModel | undefined)?.keys));
+    useUnsavedWork(() => dirty);
+    useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
     useEffect(() => {
         let isMounted = true;
@@ -161,6 +181,10 @@ export function EncryptionSection() {
                     const trimmedName = row.keyName.trim();
                     if (!trimmedName) {
                         toast.error(uiText("validate.encryptionKeyName"));
+                        return;
+                    }
+                    if (keyNameError(trimmedName)) {
+                        toast.error(`${trimmedName}: ${keyNameError(trimmedName)}`);
                         return;
                     }
                     if (seenNames.has(trimmedName)) {
@@ -294,8 +318,15 @@ export function EncryptionSection() {
                                                     })
                                                 }
                                                 placeholder="client-key-v1"
+                                                maxLength={ENCRYPTION_KEY_NAME.maxLength}
+                                                aria-invalid={!!keyNameError(currentKey.keyName)}
+                                                aria-describedby={`key-${currentKey.id}-error`}
                                                 disabled={loading}
                                                 autoComplete="off"
+                                            />
+                                            <KeyNameError
+                                                id={`key-${currentKey.id}-error`}
+                                                name={currentKey.keyName}
                                             />
                                         </div>
 
@@ -382,8 +413,19 @@ export function EncryptionSection() {
                                                                     })
                                                                 }
                                                                 placeholder="client-key-v0"
+                                                                maxLength={
+                                                                    ENCRYPTION_KEY_NAME.maxLength
+                                                                }
+                                                                aria-invalid={
+                                                                    !!keyNameError(row.keyName)
+                                                                }
+                                                                aria-describedby={`key-${row.id}-error`}
                                                                 disabled={loading}
                                                                 autoComplete="off"
+                                                            />
+                                                            <KeyNameError
+                                                                id={`key-${row.id}-error`}
+                                                                name={row.keyName}
                                                             />
                                                         </div>
 

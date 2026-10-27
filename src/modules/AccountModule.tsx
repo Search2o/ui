@@ -16,8 +16,9 @@ import { reportAccountSuspended } from "@/shared/accountSuspended";
 import { errorText } from "@/shared/apiError";
 import { Loader2, Trash2 } from "lucide-react";
 import { ActionBar } from "@/shared/ActionBar";
-import { useUnsavedWork } from "@/shared/sessionExpiry";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
 import { uiText } from "@/shared/uiText";
+import { useSession } from "@/shared/useSession";
 import { MAX_LENGTHS } from "@/shared/schemaRules";
 
 function formatBillingStart(epochMs: number): string {
@@ -42,6 +43,8 @@ export default function AccountModule() {
     const [billingName, setBillingName] = useState<string>("");
     const [serviceLevel, setServiceLevel] = useState<string>("");
     const [billingStartAt, setBillingStartAt] = useState<number | null>(null);
+    const [paidServiceAvailable, setPaidServiceAvailable] = useState(false);
+    const { setServiceLevel: setSessionServiceLevel } = useSession();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -64,33 +67,36 @@ export default function AccountModule() {
             setLoadedAccount(fields);
             setBillingName(resp.billingName ?? "");
             setServiceLevel(resp.serviceLevel ?? "");
+            setSessionServiceLevel(resp.serviceLevel ?? null);
+            setPaidServiceAvailable(resp.paidServiceAvailable ?? false);
             setBillingStartAt(resp.billingStartAt ?? null);
         } catch (err) {
             toast.error(errorText(err, "Failed to load the account."));
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [setSessionServiceLevel]);
 
     useEffect(() => {
         void load();
     }, [load]);
 
     const dirty = !loading && trimmedFields(account) !== trimmedFields(loadedAccount);
-    useUnsavedWork(() => dirty);
 
-    const save = async () => {
+    const save = async (): Promise<boolean> => {
         try {
             setSaving(true);
             const res = await API.updateAccount(accountUpdatePayload(account, loadedAccount));
             if (res && res.success === false) {
                 toast.error(res.error?.message ?? "Failed to update account.");
-                return;
+                return false;
             }
             setLoadedAccount(account);
             toast.success(`Account updated. ${uiText("account.namePropagation")}`);
+            return true;
         } catch (err) {
             toast.error(errorText(err, "Failed to update account."));
+            return false;
         } finally {
             setSaving(false);
         }
@@ -115,6 +121,12 @@ export default function AccountModule() {
             setDeleting(false);
         }
     };
+
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => dirty,
+        onSave: !loading ? save : undefined,
+        what: "page",
+    });
 
     return (
         <Card>
@@ -147,7 +159,7 @@ export default function AccountModule() {
                                 </div>
 
                                 {offer.kind === "startPaid" ? (
-                                    <UpgradeToPaid onDone={load} />
+                                    <UpgradeToPaid onDone={load} available={paidServiceAvailable} />
                                 ) : null}
                             </div>
                         ) : null}
@@ -233,6 +245,7 @@ export default function AccountModule() {
                 )}
             </CardContent>
 
+            {unsavedDialog}
             <ActionBar
                 onUpdate={() => void save()}
                 dirty={dirty}

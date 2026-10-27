@@ -14,7 +14,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { useUnsavedWork } from "@/shared/sessionExpiry";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
 import { Check } from "lucide-react";
 import { ActionBar } from "@/shared/ActionBar";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
@@ -63,7 +63,6 @@ export default function SysVarConfigModule() {
         configPart !== null &&
         (configPart.sysVariables ?? []).join() !==
             ((loaded?.configValue as SysVar | undefined)?.sysVariables ?? []).join();
-    useUnsavedWork(() => dirty);
 
     useEffect(() => {
         let cancelled = false;
@@ -101,8 +100,8 @@ export default function SysVarConfigModule() {
         else void save();
     };
 
-    const save = async () => {
-        if (!loaded || !configPart) return;
+    const save = async (): Promise<boolean> => {
+        if (!loaded || !configPart) return false;
         setRemoving(null);
         setIsSaving(true);
         try {
@@ -115,7 +114,7 @@ export default function SysVarConfigModule() {
 
             if (!resp.success) {
                 toast.error(resp.error?.message || "Failed to update the system variables.");
-                return;
+                return false;
             }
 
             toast.success(`System variables updated. ${uiText("config.appliesToNewRuns")}`);
@@ -126,8 +125,10 @@ export default function SysVarConfigModule() {
                 configVersion: resp.configVersion,
             });
             setConfigPart(nextConfigPart);
+            return true;
         } catch {
             toast.error("Failed to update the system variables.");
+            return false;
         } finally {
             setIsSaving(false);
         }
@@ -141,6 +142,12 @@ export default function SysVarConfigModule() {
             else current.delete(name);
             return { ...prev, sysVariables: OPTIONAL_SYS_VARIABLES.filter((v) => current.has(v)) };
         });
+
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => dirty,
+        onSave: !isLoading && removed().length === 0 ? save : undefined,
+        what: "page",
+    });
 
     return (
         <Card className="w-full">
@@ -193,6 +200,7 @@ export default function SysVarConfigModule() {
                 </div>
             </CardContent>
 
+            {unsavedDialog}
             <ActionBar onUpdate={onUpdate} dirty={dirty} busy={isSaving} disabled={isLoading} />
 
             <AlertDialog open={removing !== null} onOpenChange={(o) => !o && setRemoving(null)}>

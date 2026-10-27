@@ -13,20 +13,16 @@ export const PAGE_HELP: Record<string, string> = {
         "Run this published agent directly against a query you type, without going through search. Useful for checking how an agent answers when you already know which one should handle the question.",
 
     "llm-profiles":
-        "Define the LLM profiles that agents can use. Agents should refer to the profile names defined here in the 'llm' command's llmProfile field. Create a new LLM profile to see the description of each field.",
+        "Define the LLM profiles that agents can use. Agents should refer to the profile names defined here in the 'llm' command's profile field. Create a new LLM profile to see the description of each field.",
     "api-profiles": "Configure API connections from agents to REST servers.",
     "db-profiles":
         "Database connections an agent can query. Agents name a profile in the 'db' command and cannot connect any other way: the connection string is set here and nowhere else.",
-    "prompt-profiles":
-        "Reusable system and user prompts that agents refer to by name, so the same wording does not have to be repeated in every agent that needs it.",
     "llm-profile-detail":
         "One LLM profile: the adapter and model it calls, the server and credentials used to reach it, and the limits that apply to calls made through it. Agents name this profile in the 'llm' command.",
     "api-profile-detail":
         "One API profile: the URL of a REST service and the credentials used to reach it. Agents name this profile in the 'api' command.",
     "db-profile-detail":
         "One database profile: its connection string and the pool settings used for connections to it. Agents name this profile in the 'db' command.",
-    "prompt-profile-detail":
-        "One prompt profile: the system prompt, usually set once per conversation, and the user prompts, which are merged into a single string before an LLM call.",
     "mcp-server-detail":
         "One MCP server: where it is and how to authenticate to it. The tools it exposes become available to agents that name this server.",
     "mcp-servers":
@@ -71,11 +67,11 @@ export const PAGE_HELP: Record<string, string> = {
     account:
         "This account's name, and the addresses billing and Search2o use to reach it. The billing name is set by the payment provider when the account is registered and is shown here for reference.",
     billing:
-        "What this account is being charged: the seats counted so far in the current period, the estimate for the month, and each closed invoice. Only the account owner can see it.",
+        "What this account is being charged: the platform, developer, storage and usage fees so far in the current period, and each closed invoice. Only the account owner of a paid account can see it.",
     "user-view":
         "One user's account: their role, which decides what they can do, and their recent activity. Developers and above can build agents; a plain user can only search.",
     "audit-log":
-        "What has changed in the system and who changed it — agents published, configuration updated. Filter by type or by user to narrow the feed.",
+        "What has changed in the account and who changed it — agents published, configuration updated. Filter by type or by user to narrow the log.",
 
     profile: "View and update your profile details.",
     docs: "Ask a question about Search2o and get an answer from the documentation. Each question is answered on its own \u2014 nothing is remembered between them, so ask a whole question rather than a follow-up.",

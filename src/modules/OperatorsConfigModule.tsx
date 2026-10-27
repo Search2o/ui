@@ -13,7 +13,7 @@ import { useFieldHelp } from "@/shared/fieldHelp";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { useUnsavedWork } from "@/shared/sessionExpiry";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
 import { ActionBar } from "@/shared/ActionBar";
 import { useSavedBaseline } from "@/shared/savedBaseline";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
@@ -50,7 +50,6 @@ export default function OperatorsConfigModule() {
     const [modes, setModes] = useState<Partial<Record<OperatorKey, OperatorMode>>>({});
 
     const { dirty, markSaved } = useSavedBaseline(configPart ? { configPart, modes } : null);
-    useUnsavedWork(() => dirty);
 
     useEffect(() => {
         let cancelled = false;
@@ -119,8 +118,8 @@ export default function OperatorsConfigModule() {
         }));
     };
 
-    const onUpdate = async () => {
-        if (!model || !configPart) return;
+    const onUpdate = async (): Promise<boolean> => {
+        if (!model || !configPart) return false;
 
         setIsSaving(true);
         try {
@@ -139,7 +138,7 @@ export default function OperatorsConfigModule() {
 
             if (!res.success) {
                 toast.error(res.error?.message || "Failed to update the compile rules");
-                return;
+                return false;
             }
 
             toast.success(uiText("config.compileUpdated"));
@@ -152,8 +151,10 @@ export default function OperatorsConfigModule() {
 
             setConfigPart(nextConfigPart);
             markSaved({ configPart: nextConfigPart, modes });
+            return true;
         } catch {
             toast.error("Failed to update the compile rules");
+            return false;
         } finally {
             setIsSaving(false);
         }
@@ -166,6 +167,12 @@ export default function OperatorsConfigModule() {
             (modes[row.key] ?? modeOf(ruleOf(operators, row.key))) === "rewrite" &&
             !(ruleOf(operators, row.key).rewrite ?? "").trim(),
     );
+
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => dirty,
+        onSave: !(isLoading || needsName.length > 0) ? onUpdate : undefined,
+        what: "page",
+    });
 
     return (
         <Card className="w-full">
@@ -303,6 +310,7 @@ export default function OperatorsConfigModule() {
                 </div>
             </CardContent>
 
+            {unsavedDialog}
             <ActionBar
                 onUpdate={onUpdate}
                 dirty={dirty}

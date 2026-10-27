@@ -321,7 +321,7 @@ export default function UsersModule() {
                 <Dialog
                     open={addOpen}
                     onOpenChange={(open) => {
-                        if (!open) return;
+                        if (!open && !busy) setAddOpen(false);
                     }}
                 >
                     <DialogContent
@@ -390,7 +390,7 @@ export default function UsersModule() {
                 <Dialog
                     open={roleOpen}
                     onOpenChange={(open) => {
-                        if (!open) return;
+                        if (!open && !busy) setRoleOpen(false);
                     }}
                 >
                     <DialogContent
@@ -435,7 +435,7 @@ export default function UsersModule() {
                     </DialogContent>
                 </Dialog>
 
-                <Card className="rounded-2xl">
+                <Card className="gap-0 rounded-2xl py-0">
                     <CardContent className="p-0">
                         <div className="flex flex-wrap items-end gap-4 border-b p-4">
                             <div className="space-y-1">

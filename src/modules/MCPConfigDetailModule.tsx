@@ -34,6 +34,7 @@ import {
     makeKeyValueRow,
     rowsFromTextMap,
     rowsToTextMap,
+    rowValueFields,
     type KeyValueRow,
 } from "@/shared/keyValueMap";
 import { DYNAMIC_FIELD_INPUT_CLASS } from "@/shared/dynamicField";
@@ -41,7 +42,13 @@ import { WrappingInput } from "@/shared/WrappingInput";
 import { dynamicFieldTitle, useDynamicFields } from "@/shared/dynamicSchema";
 import { errorText } from "@/shared/apiError";
 import { uiText } from "@/shared/uiText";
-import { MCP_SERVER_NAME, matchesRule, MAX_LENGTHS } from "@/shared/schemaRules";
+import {
+    EXPR_TEXT,
+    MCP_SERVER_NAME,
+    matchesRule,
+    MAX_LENGTHS,
+    textFieldsError,
+} from "@/shared/schemaRules";
 
 interface EditableServer extends Omit<McpServerModel, "headers" | "retryableErrorCodes"> {
     uiId: string;
@@ -226,6 +233,15 @@ export default function MCPConfigDetailModule() {
             return false;
         }
 
+        const text = textFieldsError(EXPR_TEXT, [
+            { label: "The URL", value: server.url },
+            ...rowValueFields(server.headersRows, "Header"),
+        ]);
+        if (text) {
+            toast.error(text);
+            return false;
+        }
+
         try {
             updateServerField(index, "isSaving", true);
             const response = await API.upsertAgentConfigPart({
@@ -401,7 +417,7 @@ export default function MCPConfigDetailModule() {
                 </CardHeader>
 
                 <CardContent className="p-0">
-                    <div className="space-y-4 px-4 pb-4">
+                    <div className="space-y-4 px-6 pb-4">
                         <div className="grid gap-2">
                             <FieldLabel help={fh("url")} htmlFor={`url-${index}`}>
                                 Server URL
@@ -496,7 +512,7 @@ export default function MCPConfigDetailModule() {
                                 <Trash2 className="h-4 w-4" />
                                 Delete
                             </Button>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="order-last basis-full text-xs text-muted-foreground sm:order-none sm:basis-auto">
                                 {isUsed
                                     ? uiText("delete.mcpInUse")
                                     : uiText("delete.cannotBeUndone")}

@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Search2o
  * Search2o Agent Server
- * OpenAPI spec version: 0.10.2
+ * OpenAPI spec version: 0.2.0
  */
 import type {
   AccountModel,
@@ -90,6 +90,7 @@ import type {
   ProfilesResponseModel,
   PublishDescriptorModel,
   PublishDescriptorResponseModel,
+  PublishDraftModel,
   PublishDraftResponseModel,
   ReportWindow,
   RevokeIntegrationTokenModel,
@@ -732,10 +733,10 @@ export const getPublishDraftUrl = () => {
 }
 
 /**
- * This publishes the draft agent to the system.
+ * This publishes the draft agent to the system. It returns success false with didMetaChange when the agent's title, run limits or prompts were changed after the draft was made and overwrite is off.
  * @summary Publish a draft agent
  */
-export const publishDraft = async (draftidModel: DraftidModel, options?: RequestInit): Promise<PublishDraftResponseModel> => {
+export const publishDraft = async (publishDraftModel: PublishDraftModel, options?: RequestInit): Promise<PublishDraftResponseModel> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -748,7 +749,7 @@ return orvalFetcher<PublishDraftResponseModel>(getPublishDraftUrl(),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(draftidModel)
+    body: JSON.stringify(publishDraftModel)
   }
 );}
 
@@ -1259,7 +1260,7 @@ export const getGetProfilesUrl = () => {
 }
 
 /**
- * Gets every configured profile, grouped by type (llm, api, mcp, db, prompt), each with its name and documentation. A profile that reads a secret this agent server cannot find is left out. Useful when writing agents that reference profiles.
+ * Gets every configured profile, grouped by type (llm, api, mcp, db), each with its name and documentation. A profile that reads a secret this agent server cannot find is left out. Useful when writing agents that reference profiles.
  * @summary Get the configured profiles
  */
 export const getProfiles = async (emptyRequestModel: EmptyRequestModel, options?: RequestInit): Promise<ProfilesResponseModel> => {
@@ -2741,7 +2742,7 @@ export const getGetCurrentInvoiceUrl = () => {
 }
 
 /**
- * The invoice for the billing period in progress, as rows to display, with the past periods that can be fetched with getPastInvoice.
+ * The invoice for the billing period in progress, as rows to display, with the past periods that can be fetched with getPastInvoice. Refused for an account that is not on a paid plan.
  * @summary Get the current invoice
  */
 export const getCurrentInvoice = async (emptyRequestModel: EmptyRequestModel, options?: RequestInit): Promise<InvoiceResponseModel> => {
@@ -2803,7 +2804,7 @@ export const getGetAccountUrl = () => {
 }
 
 /**
- * Details of this Search2o account: the account name, the billing and contact emails, and when the account was created.
+ * Details of this Search2o account: the account name, the billing and contact emails, the service level, whether a paid plan is available, and when the account was created.
  * @summary Get account details
  */
 export const getAccount = async ( options?: RequestInit): Promise<AccountModel> => {
@@ -2859,7 +2860,7 @@ export const getStartPaidServiceUrl = () => {
 }
 
 /**
- * Moves this account onto a paid plan at once. There is no approval step. It takes no parameters, and returns the new service level and when billing starts.
+ * Moves this account onto a paid plan at once. There is no approval step. It takes no parameters, and returns the new service level and when billing starts. Refused when paid plans are not available, which getAccount reports in paidServiceAvailable.
  * @summary Start paid service
  */
 export const startPaidService = async (emptyRequestModel: EmptyRequestModel, options?: RequestInit): Promise<StartPaidServiceResponseModel> => {

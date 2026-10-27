@@ -60,7 +60,7 @@ function RunningStrip({ jobs }: { jobs: IndexingJob[] }) {
                                 : uiText("indexing.wait")}
                         </p>
                     </div>
-                    <span className="ml-1 font-mono text-sm tabular-nums text-muted-foreground">
+                    <span className="ml-1 shrink-0 font-mono text-sm tabular-nums text-muted-foreground">
                         {clock(Date.now() - job.startedAt)}
                     </span>
                 </div>

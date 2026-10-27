@@ -15,8 +15,15 @@ import { errorText } from "@/shared/apiError";
 import { toast } from "sonner";
 import { ArrowUpCircle, Loader2 } from "lucide-react";
 import { useUiText } from "@/shared/uiText";
+import { HoverTip } from "@/shared/HoverTip";
 
-export function UpgradeToPaid({ onDone }: { onDone: () => void | Promise<void> }) {
+export function UpgradeToPaid({
+    onDone,
+    available = true,
+}: {
+    onDone: () => void | Promise<void>;
+    available?: boolean;
+}) {
     const t = useUiText();
     const [confirming, setConfirming] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -42,10 +49,17 @@ export function UpgradeToPaid({ onDone }: { onDone: () => void | Promise<void> }
 
     return (
         <>
-            <Button type="button" className="gap-2" onClick={() => setConfirming(true)}>
-                <ArrowUpCircle className="h-4 w-4" aria-hidden />
-                Upgrade to the paid plan
-            </Button>
+            <HoverTip tip={available ? null : t("upgrade.paid.unavailable")} wrap>
+                <Button
+                    type="button"
+                    className="gap-2"
+                    disabled={!available}
+                    onClick={() => setConfirming(true)}
+                >
+                    <ArrowUpCircle className="h-4 w-4" aria-hidden />
+                    Upgrade to the paid plan
+                </Button>
+            </HoverTip>
 
             <AlertDialog open={confirming} onOpenChange={(next) => !busy && setConfirming(next)}>
                 <AlertDialogContent>

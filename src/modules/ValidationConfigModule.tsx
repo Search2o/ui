@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import * as API from "@/orval/search2o";
 import { toast } from "sonner";
-import { useUnsavedWork } from "@/shared/sessionExpiry";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { FieldLabel } from "@/shared/FieldLabel";
 import { useFieldHelp } from "@/shared/fieldHelp";
@@ -31,7 +31,6 @@ export default function ValidationConfigModule() {
     const [configPart, setConfigPart] = useState<AgentValidationModel>();
 
     const { dirty, markSaved } = useSavedBaseline(configPart);
-    useUnsavedWork(() => dirty);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -56,8 +55,8 @@ export default function ValidationConfigModule() {
         })();
     }, [markSaved]);
 
-    async function onUpdate() {
-        if (!model || !configPart) return;
+    async function onUpdate(): Promise<boolean> {
+        if (!model || !configPart) return false;
 
         setSaving(true);
         try {
@@ -68,21 +67,29 @@ export default function ValidationConfigModule() {
 
             if (!res.success) {
                 toast.error(res.error?.message ?? "Update failed.");
-                return;
+                return false;
             }
             setModel({ ...model, configVersion: res.configVersion });
             markSaved(configPart);
             toast.success(
                 `Agent runtime validation checks updated. ${uiText("config.appliesToNewRuns")}`,
             );
+            return true;
         } catch {
             toast.error("Update failed.");
+            return false;
         } finally {
             setSaving(false);
         }
     }
 
     const disabled = loading || !configPart;
+
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => dirty,
+        onSave: !disabled ? onUpdate : undefined,
+        what: "page",
+    });
 
     return (
         <Card className="w-full shadow-sm">
@@ -101,7 +108,7 @@ export default function ValidationConfigModule() {
                         <Input
                             id="maxIterations"
                             type="number"
-                            className="w-28"
+                            className="w-28 shrink-0"
                             min={0}
                             step={1}
                             disabled={disabled}
@@ -135,7 +142,7 @@ export default function ValidationConfigModule() {
                         <Input
                             id="dbMaxRows"
                             type="number"
-                            className="w-28"
+                            className="w-28 shrink-0"
                             min={0}
                             step={1}
                             disabled={disabled}
@@ -169,7 +176,7 @@ export default function ValidationConfigModule() {
                         <Input
                             id="agentMaxLength"
                             type="number"
-                            className="w-28"
+                            className="w-28 shrink-0"
                             min={0}
                             step={1}
                             disabled={disabled}
@@ -210,8 +217,8 @@ export default function ValidationConfigModule() {
                         <Input
                             id="yieldLoopsAfter"
                             type="number"
-                            className="w-28"
-                            min={0}
+                            className="w-28 shrink-0"
+                            min={1}
                             step={1}
                             disabled={disabled}
                             value={configPart?.yieldLoopsAfter ?? ""}
@@ -224,7 +231,7 @@ export default function ValidationConfigModule() {
                                                   e.target.value === ""
                                                       ? undefined
                                                       : Math.max(
-                                                            0,
+                                                            1,
                                                             Number.parseInt(e.target.value, 10) ||
                                                                 0,
                                                         ),
@@ -244,7 +251,7 @@ export default function ValidationConfigModule() {
                         <Input
                             id="streamHeartbeat"
                             type="number"
-                            className="w-28"
+                            className="w-28 shrink-0"
                             min={1}
                             step={1}
                             disabled={disabled}
@@ -270,6 +277,7 @@ export default function ValidationConfigModule() {
                     </div>
                 </div>
             </CardContent>
+            {unsavedDialog}
             <ActionBar
                 onUpdate={() => void onUpdate()}
                 dirty={dirty}

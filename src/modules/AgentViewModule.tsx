@@ -25,7 +25,6 @@ import {
     Trash2,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -42,20 +41,21 @@ import { resetPagedList } from "@/shared/pagedList";
 import { JsonCodeBlock } from "@/shared/JsonCodeBlock";
 import { findPathRange } from "@/shared/agentPath";
 import type { AgentResponseModel, PastVersionModel } from "@/orval/search2o.schemas";
+import { PublishedPrompts } from "@/shared/PublishedPrompts";
+import { PublishedConst } from "@/shared/ConstFields";
 import { UpdatedBy } from "@/shared/UpdatedBy";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
-import { UsedByAgents } from "@/shared/UsedByAgents";
+import { Composer } from "@/shared/Composer";
 import { HoverTip } from "@/shared/HoverTip";
 import { errorText } from "@/shared/apiError";
 import { uiText } from "@/shared/uiText";
 import { useFieldHelp, useFieldTitle } from "@/shared/fieldHelp";
 import { AGENT_TAG, matchesRule } from "@/shared/schemaRules";
 import { MAX_LENGTHS } from "@/shared/schemaRules";
-import { startIndexing, useIndexingJob } from "@/shared/indexingJobs";
+import { INDEXING_TIMEOUT_MS, startIndexing, useIndexingJob } from "@/shared/indexingJobs";
+import { fmtLocalShort } from "@/shared/commonFuncs";
 
 const CURRENT_VERSION_VALUE = "__current__";
-
-const INDEXING_TIMEOUT_MS = 15 * 60 * 1000;
 
 function EditPencil({ tip, onClick }: { tip: string; onClick: () => void }) {
     return (
@@ -132,7 +132,7 @@ function InlineEdit({
 }
 
 function fmtPastVersion(epochMs: number): string {
-    return new Date(epochMs).toLocaleString();
+    return fmtLocalShort(epochMs);
 }
 
 function PastVersionLabel({ item }: { item: PastVersionModel }) {
@@ -386,7 +386,8 @@ export default function AgentViewModule() {
 
     const descTrimmed = desc.trim();
     const isIndexed = displayAgent?.isIndexed ?? false;
-    const invokers = agent?.invokedBy ?? [];
+    const indexUpToDate =
+        isIndexed && descTrimmed === (agent?.descriptor?.description ?? "").trim();
     const memoryLabels = agent?.memoryLabels ?? [];
 
     const onIndex = () => {
@@ -715,13 +716,17 @@ export default function AgentViewModule() {
                                     <span className="flex items-center gap-1">
                                         <HoverTip tip={fh("maxTime")}>
                                             <span className="tabular-nums">
-                                                {agent?.maxTime ?? "—"}s
+                                                {agent?.maxTime != null
+                                                    ? `${agent.maxTime} s`
+                                                    : "no time limit"}
                                             </span>
                                         </HoverTip>
-                                        <span className="text-muted-foreground/40">/</span>
+                                        <span className="text-muted-foreground/40">·</span>
                                         <HoverTip tip={fh("maxCost")}>
                                             <span className="tabular-nums">
-                                                ${agent?.maxCost ?? "—"}
+                                                {agent?.maxCost != null
+                                                    ? `$${agent.maxCost} a run`
+                                                    : "no cost limit"}
                                             </span>
                                         </HoverTip>
                                         <EditPencil
@@ -738,7 +743,7 @@ export default function AgentViewModule() {
                         </>
                     ) : null}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
                     {displayAgent ? (
                         <>
                             <HoverTip tip="This agent's executions, duration and failures">
@@ -772,6 +777,15 @@ export default function AgentViewModule() {
                             >
                                 <Play className="h-4 w-4" />
                                 Run
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void onEditDraft()}
+                            >
+                                <Pencil className="h-4 w-4" />
+                                Edit in a draft
                             </Button>
                         </>
                     ) : null}
@@ -811,39 +825,9 @@ export default function AgentViewModule() {
                                 }}
                             />
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => void onIndex()}
-                                disabled={indexJobRunning || descTrimmed.length === 0}
-                            >
-                                <TableOfContents className="h-4 w-4" />
-                                {validatingDesc
-                                    ? "Validating…"
-                                    : indexJobRunning
-                                      ? "Indexing…"
-                                      : isIndexed
-                                        ? "Update index"
-                                        : "Add to index"}
-                            </Button>
-                            {isIndexed && (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={() => setConfirmDeindex(true)}
-                                    disabled={indexJobRunning}
-                                >
-                                    Remove from index
-                                </Button>
-                            )}
-                        </div>
                     </div>
 
-                    <Textarea
+                    <Composer
                         maxLength={MAX_LENGTHS.AGENT_DESCRIPTION.max}
                         id="agent-description"
                         value={desc}
@@ -854,6 +838,50 @@ export default function AgentViewModule() {
                         placeholder={uiText("agent.descriptionPrompt")}
                         className="min-h-32"
                         disabled={indexJobRunning}
+                        action={
+                            <>
+                                {isIndexed && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-destructive hover:text-destructive"
+                                        onClick={() => setConfirmDeindex(true)}
+                                        disabled={indexJobRunning}
+                                    >
+                                        Remove from index
+                                    </Button>
+                                )}
+                                <HoverTip
+                                    tip={
+                                        indexUpToDate && !indexJobRunning
+                                            ? "The index already has this description. Change it to update the index."
+                                            : null
+                                    }
+                                    wrap
+                                >
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => void onIndex()}
+                                        disabled={
+                                            indexJobRunning ||
+                                            descTrimmed.length === 0 ||
+                                            indexUpToDate
+                                        }
+                                    >
+                                        <TableOfContents className="h-4 w-4" />
+                                        {validatingDesc
+                                            ? "Validating…"
+                                            : indexJobRunning
+                                              ? "Indexing…"
+                                              : isIndexed
+                                                ? "Update index"
+                                                : "Add to index"}
+                                    </Button>
+                                </HoverTip>
+                            </>
+                        }
                     />
 
                     {lockedElsewhere && (
@@ -891,8 +919,9 @@ export default function AgentViewModule() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>{uiText("agent.removeFromIndexTitle")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Search queries will no longer match this agent. The description below is
-                            kept, so you can index it again at any time.
+                            Search queries will no longer match this agent, and its saved
+                            description is deleted with it. The text stays in the box until you
+                            leave this page, so you can add it back.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -934,30 +963,19 @@ export default function AgentViewModule() {
                 </AlertDialogContent>
             </AlertDialog>
 
-            {displayAgent && (invokers.length > 0 || memoryLabels.length > 0) ? (
-                <div className="space-y-1.5 px-6 pb-4">
-                    {invokers.length > 0 ? (
-                        <UsedByAgents
-                            names={invokers}
-                            verb="Invoked by"
-                            onOpen={(name) => UI.openSubModule("AgentView", { agentName: name })}
-                        />
-                    ) : null}
-                    {memoryLabels.length > 0 ? (
-                        <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                            <HoverTip tip={uiText("agent.memoryLabelsWarning")}>
-                                <span className="cursor-help">
-                                    Stores memories under {memoryLabels.length} label
-                                    {memoryLabels.length === 1 ? "" : "s"}:
-                                </span>
-                            </HoverTip>
-                            {memoryLabels.map((label) => (
-                                <span key={label} className="rounded border px-1.5 py-0.5">
-                                    {label}
-                                </span>
-                            ))}
-                        </div>
-                    ) : null}
+            {displayAgent && memoryLabels.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1 px-6 pb-4 text-xs text-muted-foreground">
+                    <HoverTip tip={uiText("agent.memoryLabelsWarning")}>
+                        <span className="cursor-help">
+                            Stores memories under {memoryLabels.length} label
+                            {memoryLabels.length === 1 ? "" : "s"}:
+                        </span>
+                    </HoverTip>
+                    {memoryLabels.map((label) => (
+                        <span key={label} className="rounded border px-1.5 py-0.5">
+                            {label}
+                        </span>
+                    ))}
                 </div>
             ) : null}
 
@@ -965,28 +983,32 @@ export default function AgentViewModule() {
 
             <CardContent className="p-0">
                 {loading ? (
-                    <div className="space-y-3 p-4">
+                    <div className="space-y-3 px-6 py-4">
                         <Skeleton className="h-4 w-[85%]" />
                         <Skeleton className="h-4 w-[92%]" />
                         <Skeleton className="h-4 w-[88%]" />
                         <Skeleton className="h-[48vh] w-full" />
                     </div>
                 ) : (
-                    <div className="space-y-4 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="space-y-0.5">
-                                <div className="text-sm font-medium">Agent definition</div>
-                                <UpdatedBy obj={displayAgent} />
-                            </div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => void onEditDraft()}
-                            >
-                                <Pencil className="h-4 w-4" />
-                                Edit as draft
-                            </Button>
+                    <div className="space-y-4 px-6 py-4">
+                        {agent ? (
+                            <PublishedConst
+                                raw={agent.const}
+                                error={agent.constError || undefined}
+                                label={ft("const", "Const")}
+                            />
+                        ) : null}
+
+                        {agent ? (
+                            <PublishedPrompts
+                                prompts={agent.agentPrompts ?? {}}
+                                viewingPastVersion={selectedVersion !== CURRENT_VERSION_VALUE}
+                            />
+                        ) : null}
+
+                        <div className="space-y-0.5">
+                            <div className="text-sm font-medium">Agent definition</div>
+                            <UpdatedBy obj={displayAgent} />
                         </div>
 
                         {agent?.hasPastVersions ? (
@@ -1033,7 +1055,7 @@ export default function AgentViewModule() {
                 {displayAgent ? (
                     <>
                         <Separator />
-                        <div className="flex items-center justify-between gap-3 p-4">
+                        <div className="flex items-center justify-between gap-3 px-6 py-4">
                             <span className="text-xs text-muted-foreground">
                                 {uiText("delete.agentCannotBeUndone")}
                             </span>
@@ -1043,13 +1065,6 @@ export default function AgentViewModule() {
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
                                 onClick={() => {
-                                    if (invokers.length > 0) {
-                                        toast.warning(
-                                            `${agent?.agentName} is invoked by ${invokers.join(", ")}. Remove those calls before deleting it.`,
-                                            { duration: 10000 },
-                                        );
-                                        return;
-                                    }
                                     if (displayAgent.isIndexed) {
                                         toast.warning(uiText("agent.deindexFirst"), {
                                             duration: 8000,

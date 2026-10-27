@@ -3,9 +3,10 @@ export const UI_TEXT_DEFAULTS = {
         "You will receive a response from {support.email} within 1 to 3 business days.",
     "support.email": "support@search2o.com",
 
+    "upgrade.paid.unavailable": "Paid plans are not available yet.",
     "upgrade.paid.confirmTitle": "Move this account to the paid plan?",
     "upgrade.paid.confirmBody":
-        "The change takes effect at once and billing starts today. There is no approval step.",
+        "Billing starts today. The account is charged monthly: a platform fee, a fee for each developer, a storage fee for the agents, memories and conversations it keeps, and a usage fee for each search and agent run. This cannot be undone.",
     "upgrade.paid.done":
         "This account is now on the paid plan. Restart the agent server(s) for this to take effect.",
 
@@ -28,7 +29,7 @@ export const UI_TEXT_DEFAULTS = {
     "docs.url": "https://search2o.com/docs",
     "docs.disclaimer": "AI-generated. Verify against",
     "docs.disclaimerLinkText": "the documentation",
-    "docs.placeholder": "e.g. How do I use the ask command inside a while loop?",
+    "docs.placeholder": "e.g., How do I use the ask command inside a while loop?",
     "docs.heading": "Search2o documentation",
     "docs.subheading":
         "Ask how Search2o itself works. Answers come from the product documentation — this does not search your agents or your data.",
@@ -86,9 +87,10 @@ export const UI_TEXT_DEFAULTS = {
     "encryption.rotate.rotatedAt": "Rotated",
     "encryption.rotate.done": "The encryption key has been rotated.",
 
+    "placeholder.sharedPool": "Empty: one pool shared by every run",
     "placeholder.searchQuery": "Ask a question…",
     "placeholder.agentRunQuery": "Enter a search query",
-    "placeholder.filterByTitle": "Filter by title...",
+    "placeholder.filterAgentList": "Filter by name, title or tag…",
     "placeholder.draftTitle": "Enter a title.",
     "placeholder.bundledUi": "Leave empty for the bundled UI",
     "placeholder.neverExpires": "Never expires",
@@ -115,7 +117,7 @@ export const UI_TEXT_DEFAULTS = {
     "welcome.group.Agents":
         "The agents themselves — the ones you are drafting and the ones you have published.",
     "welcome.group.Profiles":
-        "What agents connect to: models, reusable prompts, REST services, databases and MCP servers. Named once here, used by name in every agent.",
+        "What agents connect to: models, REST services, databases and MCP servers. Named once here, used by name in every agent.",
     "welcome.group.Guardrails":
         "What an agent is allowed to do — which Python compiles, what that code may call and read, and how far a run may go.",
     "welcome.group.Operations":
@@ -135,7 +137,7 @@ export const UI_TEXT_DEFAULTS = {
     "welcome.icon.help.title": "Contact us",
     "welcome.icon.help.body": "Send us a message when something is not working or not clear.",
     "welcome.newSearch.title": "New search",
-    "welcome.newSearch.body": "Starts a fresh question, from wherever you are.",
+    "welcome.newSearch.body": "Starts a fresh question from wherever you are.",
     "welcome.profile.title": "Your profile",
     "welcome.profile.body":
         "Your name, theme and password, the integrations that can act as you, and the way out.",
@@ -174,6 +176,7 @@ export const UI_TEXT_DEFAULTS = {
 
     "empty.agents": "No agents to display.",
     "empty.drafts": "No drafts yet. Create one to get started.",
+    "empty.filtered": "Nothing matches the filter.",
     "empty.users": "No users to display.",
     "empty.serviceAccounts": "No service accounts yet.",
     "users.sendInvite": "Email an invitation to each new user",
@@ -181,10 +184,9 @@ export const UI_TEXT_DEFAULTS = {
         "They will be added, but will not hear from us — you will need to tell them yourself.",
     "empty.auditLog": "No entries in this period.",
     "empty.llmProfiles": "No LLM profiles are configured yet.",
-    "empty.apiProfiles": "No api profiles are configured yet.",
+    "empty.apiProfiles": "No API profiles are configured yet.",
     "empty.dbProfiles": "No database profiles are configured yet.",
-    "empty.promptProfiles": "No prompt profiles are configured yet.",
-    "empty.mcpServers": "No mcp servers are configured yet.",
+    "empty.mcpServers": "No MCP servers are configured yet.",
     "empty.encryptionKeys": "No encryption keys added yet.",
 
     "report.range": "Reports cover the last 3 months.",
@@ -208,9 +210,8 @@ export const UI_TEXT_DEFAULTS = {
     "delete.agentCannotBeUndone": "Deleting an agent cannot be undone.",
     "delete.userCannotBeUndone": "Deleting a user cannot be undone.",
     "delete.profileCannotBeUndone": "Deleting a profile cannot be undone.",
-    "delete.apiInUse": "Agents are using this api; deleting it will break them.",
+    "delete.apiInUse": "Agents are using this API; deleting it will break them.",
     "delete.dbInUse": "Agents are using this profile; deleting it will break them.",
-    "delete.promptInUse": "Agents are using this profile; deleting it will break them.",
     "delete.mcpInUse": "Agents are using this server; deleting it will break them.",
     "delete.llmInUse": "Agents are using this profile; it cannot be deleted.",
     "delete.draftKeepsAgent": "This does not delete any published agent.",
@@ -239,10 +240,13 @@ export const UI_TEXT_DEFAULTS = {
         "The agent is out of the search index. Searches will not match it until it is indexed again.",
     "agent.descriptionRejected": "Edit it above and index again.",
     "agent.nameLocked": "A published agent's name cannot be changed.",
-    "agent.tagLocked": "The tag of a published agent is changed from the Published agents list.",
+    "agent.tagLocked":
+        "The tag of a published agent can be changed from the Published agents list.",
     "draft.publishedDone": "Your agent is published and live.",
     "draft.indexChoiceNotIndexed":
-        "It is not in the search index yet, so searches will not find it. To add it, write a short description of what it does on the agent's page. You can do this now or later.",
+        "It is not in the search index yet, so searches will not find it. To add it, write a short description of what it does. You can do this now, or later on the agent's page.",
+    "draft.indexingHere":
+        "Checking and indexing the description can take a minute or more. Stay here until it is done: if the description is refused, it comes back here to be fixed.",
     "draft.indexChoiceIndexed":
         "It is already in the search index, found by its current description. If this version does something different, change the description so searches keep finding it for the right questions.",
     "draft.runCancelled": "Validation cancelled. Nothing from that run was saved.",
@@ -250,6 +254,39 @@ export const UI_TEXT_DEFAULTS = {
         "A typical user query, saved with the draft. A draft must validate against one before it can be published.",
     "draft.followupHelp":
         "Asked of the conversation the last run started. It is not saved with the draft.",
+
+    "prompt.intro":
+        "Each llm command names one of these. The system and user prompts are expressions, like the rest of the agent: plain text, or { ... } Python, worked out on every LLM call in the scope of the function that makes it. A user prompt may also work out to a content part, such as an image with data and mimeType, or a list of parts.",
+    "prompt.scope.conversation": "One history, shared by every agent in the conversation.",
+    "prompt.scope.agent": "This agent's own history in the conversation.",
+    "prompt.scope.local":
+        "A history for one run only. It is kept across an ask, and starts empty on the next run.",
+    "prompt.nameRequired": "Every prompt needs a name.",
+    "prompt.needsText": "give it a system prompt, a user prompt or both.",
+    "prompt.duplicateName": "another prompt already has this name.",
+    "validate.promptName":
+        "letters, numbers and underscores only, starting with a letter and ending with a letter or number. Up to 100 characters.",
+    "prompt.publishedHelp":
+        "Prompts are changed in a draft, where the agent is validated with them, and take effect when the draft is published.",
+    "prompt.notVersioned":
+        "Prompts are not versioned, so a past version has none of its own. These are the agent's current prompts.",
+    "empty.agentPrompts": "This agent has no prompts.",
+    "empty.draftPrompts": "No prompts yet. An llm command needs one to name.",
+
+    "const.help":
+        "A JSON object the agent reads as const, for example const.region. It is stored encrypted, so the cloud cannot read it.",
+    "const.publishedHelp":
+        "Changed only in a draft. A change takes effect when the draft is published.",
+    "empty.agentConst": "This agent has no const.",
+    "const.decryptFailed": "The stored const could not be decrypted, so it is shown empty.",
+    "const.replaceOnSave":
+        "Saving a const here replaces the stored one. Leave it empty to keep the stored one as it is.",
+    "const.replaceInDraft":
+        "The agent keeps its stored const. To replace it, set a new const in a draft and publish.",
+    "publish.metaChanged":
+        "The published agent was changed after this draft was made from it. These differ between the draft and the agent:",
+    "publish.metaOverwrite":
+        "Publishing anyway replaces them with the draft's. The changes made on the published agent will be lost.",
 
     "validate.serviceAccountName":
         "Use letters and digits, with '_', '-' or '.' between them, starting and ending with a letter or a digit. Up to 64 characters.",
@@ -269,6 +306,8 @@ export const UI_TEXT_DEFAULTS = {
     "validate.encryptionKeyRequired":
         "At least one encryption key is required for client encryption.",
     "validate.encryptionKeyName": "Each encryption key must have a key name.",
+    "validate.encryptionKeyNameRule":
+        "A key name may hold letters, digits and _ . - : /, must start and end with a letter or digit, and can be at most 256 characters.",
     "validate.maxTime": "The run time limit must be a whole number of seconds, at least 1.",
     "validate.maxCost": "The cost limit must be more than 0 dollars.",
     "validate.importPath":
@@ -335,12 +374,10 @@ export const UI_TEXT_DEFAULTS = {
     "trace.flow":
         "Command and function boundaries, if-conditions, loop conditions and completions, break and continue when they fire, `end`, and the compile checks.",
     "trace.inputs":
-        "What each command was called with — the LLM request, API URL and headers, SQL, a search's query and tag, prompt text, a called function's args, and the fields an `ask` presented.",
+        "What each command was called with — the LLM request, API URL and headers, SQL, prompt text, a called function's args, and the fields an `ask` presented.",
     "trace.results":
-        "What each command produced — LLM content and token counts, API bodies, DB row counts, search results, a function's return value, what a `var` assigned, and the answers an `ask` came back with.",
+        "What each command produced — LLM content and token counts, API bodies, DB row counts, a function's return value, what a `var` assigned, and the answers an `ask` came back with.",
     "trace.tools": "Tool calls the LLM makes, their arguments and results, and MCP discovery.",
-    "trace.agents":
-        "Nested agents on both sides — the inputs an agent was invoked with, and what it returned or whether it paused for the user.",
     "trace.errors": "Every failure, whatever raised it — so 'errors only' is complete.",
 
     "connect.signInPrompt": "Sign in to approve this request.",

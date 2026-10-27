@@ -2,7 +2,9 @@ import { type KeyboardEvent, useState } from "react";
 import * as API from "@/orval/search2o";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Loader2, SendHorizontal } from "lucide-react";
+import { Composer } from "@/shared/Composer";
 import * as UI from "@/shared/uistate";
 import { preloadModule } from "@/shared/moduleRegistry";
 import { AgentSuggestions, NoAgentMatch } from "@/shared/AgentSuggestions";
@@ -61,14 +63,18 @@ export default function SearchHistoryModule() {
         }
     };
 
+    const submit = () => {
+        const chosen = matches.selectedAgent;
+        if (chosen) run(chosen.agentName);
+        else void search();
+    };
+
     const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (matches.handleKeyDown(e)) return;
         if (e.key !== "Enter" || e.shiftKey) return;
 
         e.preventDefault();
-        const chosen = matches.selectedAgent;
-        if (chosen) run(chosen.agentName);
-        else void search();
+        submit();
     };
 
     return (
@@ -79,11 +85,11 @@ export default function SearchHistoryModule() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                     <div className="mx-auto w-full max-w-3xl">
-                        <Textarea
+                        <Composer
                             rows={2}
                             placeholder={uiText("placeholder.searchQuery")}
                             aria-label="Ask a question"
-                            className="min-h-[64px] resize-none text-base leading-relaxed"
+                            className="min-h-[64px] text-base leading-relaxed"
                             value={query}
                             onChange={(e) => onChange(e.target.value)}
                             onKeyDown={onKeyDown}
@@ -97,6 +103,21 @@ export default function SearchHistoryModule() {
                                     : undefined
                             }
                             onFocus={() => preloadModule("SearchConversation")}
+                            action={
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={submit}
+                                    disabled={busy || !query.trim()}
+                                >
+                                    {busy ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                                    ) : (
+                                        <SendHorizontal className="h-4 w-4" aria-hidden />
+                                    )}
+                                    Send
+                                </Button>
+                            }
                         />
                     </div>
 

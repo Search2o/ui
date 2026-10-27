@@ -11,21 +11,7 @@ export const fmtLocalShort = (value: string | number | Date): string => {
 };
 
 export function localDatetime(epochMs: number): string {
-    const d = new Date(epochMs);
-
-    const date = new Intl.DateTimeFormat(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    }).format(d);
-
-    const time = new Intl.DateTimeFormat(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-    }).format(d);
-
-    return ` ${date} ${time}`;
+    return fmtLocalShort(epochMs);
 }
 
 export function isAbortError(e: unknown): boolean {

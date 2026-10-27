@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { useUnsavedWork } from "@/shared/sessionExpiry";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
 import { ChevronDown, ChevronRight, Copy, Plus, Trash2 } from "lucide-react";
 import { ActionBar } from "@/shared/ActionBar";
 import { useSavedBaseline } from "@/shared/savedBaseline";
@@ -223,7 +223,7 @@ function ServerEditor(props: {
                                 <div className="font-medium truncate">
                                     {server.name.trim() || "(unnamed server)"}
                                     {isDefault ? (
-                                        <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                                        <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground">
                                             default
                                         </span>
                                     ) : null}
@@ -401,6 +401,33 @@ function ServerEditor(props: {
                     </div>
 
                     <div className="space-y-2">
+                        <FieldLabel
+                            help={fh("shutdownGrace")}
+                            htmlFor={`${idPrefix}-shutdownGrace`}
+                        >
+                            {ft("shutdownGrace", "Shutdown grace (seconds)")}
+                        </FieldLabel>
+                        <Input
+                            id={`${idPrefix}-shutdownGrace`}
+                            type="number"
+                            className="w-28"
+                            min={0}
+                            step={1}
+                            value={model.shutdownGrace ?? ""}
+                            placeholder="10"
+                            onChange={(e) =>
+                                patchModel({
+                                    shutdownGrace:
+                                        e.target.value === ""
+                                            ? undefined
+                                            : Math.max(0, Math.floor(Number(e.target.value))),
+                                })
+                            }
+                            disabled={disabled}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
                         <FieldLabel help={fh("logs")} htmlFor={`${idPrefix}-logs`}>
                             Logging
                         </FieldLabel>
@@ -466,7 +493,6 @@ export default function AgentServerConfigModule() {
     const nextId = () => `srv-${idCounter.current++}`;
 
     const { dirty, markSaved } = useSavedBaseline(servers);
-    useUnsavedWork(() => dirty);
 
     useEffect(() => {
         let mounted = true;
@@ -552,22 +578,22 @@ export default function AgentServerConfigModule() {
 
     const deleteServer = (id: string) => setServers((prev) => prev.filter((s) => s.id !== id));
 
-    const onSave = async () => {
-        if (servers.length === 0) return;
+    const onSave = async (): Promise<boolean> => {
+        if (servers.length === 0) return false;
 
         const names = servers.map((s) => s.name.trim());
         if (names.some((n) => !n)) {
             toast.error(uiText("validate.serverNameRequired"));
-            return;
+            return false;
         }
         const dupes = names.filter((n, idx) => names.indexOf(n) !== idx);
         if (dupes.length) {
             toast.error(`Duplicate server configuration name: "${dupes[0]}".`);
-            return;
+            return false;
         }
         if (!names.includes(DEFAULT_SERVER)) {
             toast.error(`A "${DEFAULT_SERVER}" server configuration is required.`);
-            return;
+            return false;
         }
 
         const serversObj: AgentServerModelsServers = {};
@@ -575,7 +601,7 @@ export default function AgentServerConfigModule() {
             const logs = parseJsonObject(s.logsText, `Logs for "${s.name.trim()}"`);
             if (!logs.ok) {
                 toast.error(logs.error);
-                return;
+                return false;
             }
             const uiConfig = parseJsonObject(
                 s.uiConfigText,
@@ -583,7 +609,7 @@ export default function AgentServerConfigModule() {
             );
             if (!uiConfig.ok) {
                 toast.error(uiConfig.error);
-                return;
+                return false;
             }
 
             const pool = fieldsToConnection(s.cloudPool, s.model.cloudPool ?? {});
@@ -591,7 +617,7 @@ export default function AgentServerConfigModule() {
                 toast.error(
                     `${pool.badField} for the cloud pool of "${s.name.trim()}" must be 0 or more.`,
                 );
-                return;
+                return false;
             }
 
             serversObj[s.name.trim()] = {
@@ -616,14 +642,16 @@ export default function AgentServerConfigModule() {
 
             if (!resp.success) {
                 toast.error(resp.error?.message || "Failed to update agent server configuration");
-                return;
+                return false;
             }
 
             toast.success(uiText("config.serversUpdated"));
             setVersion(resp.configVersion);
             markSaved(servers);
+            return true;
         } catch (_e) {
             toast.error("Failed to update the agent server configuration");
+            return false;
         } finally {
             setSaving(false);
         }
@@ -631,6 +659,12 @@ export default function AgentServerConfigModule() {
 
     const disabled = loading || saving;
     const deleteTarget = servers.find((s) => s.id === deleteTargetId) ?? null;
+
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => dirty,
+        onSave: !(loading || servers.length === 0) ? onSave : undefined,
+        what: "page",
+    });
 
     return (
         <TooltipProvider>
@@ -689,6 +723,7 @@ export default function AgentServerConfigModule() {
                         </>
                     )}
                 </CardContent>
+                {unsavedDialog}
                 <ActionBar
                     onUpdate={onSave}
                     dirty={dirty}

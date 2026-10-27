@@ -7,7 +7,7 @@ import type {
     ConfigPartResponseModel,
 } from "@/orval/search2o.schemas";
 import { toast } from "sonner";
-import { useUnsavedWork } from "@/shared/sessionExpiry";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -24,7 +24,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronDown, ChevronRight, PlusCircle, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { ActionBar } from "@/shared/ActionBar";
 import { useSavedBaseline } from "@/shared/savedBaseline";
 
@@ -113,8 +113,6 @@ export default function ApiConnectionPoolsModule() {
         }
     }, [markSaved]);
 
-    useUnsavedWork(() => dirty);
-
     useEffect(() => {
         void load();
     }, [load]);
@@ -130,25 +128,25 @@ export default function ApiConnectionPoolsModule() {
 
     const deletePool = (id: string) => setPools((prev) => prev.filter((p) => p.id !== id));
 
-    const onUpdate = async () => {
-        if (version === undefined) return;
+    const onUpdate = async (): Promise<boolean> => {
+        if (version === undefined) return false;
 
         const names = pools.map((p) => p.name.trim());
         for (const pool of pools) {
             const problem = poolNameError(pool.name);
             if (problem) {
                 toast.error(pool.name.trim() ? `“${pool.name.trim()}”: ${problem}` : problem);
-                return;
+                return false;
             }
         }
         const duplicate = names.find((n, i) => names.indexOf(n) !== i);
         if (duplicate) {
             toast.error(`More than one pool is named "${duplicate}".`);
-            return;
+            return false;
         }
         if (!names.includes(DEFAULT_POOL_NAME)) {
             toast.error(`A pool named "${DEFAULT_POOL_NAME}" is required.`);
-            return;
+            return false;
         }
 
         const built: ApiConnectionPoolsModelPools = {};
@@ -156,7 +154,7 @@ export default function ApiConnectionPoolsModule() {
             const result = fieldsToPool(form, form.source);
             if (!result.ok) {
                 toast.error(`${result.badField} for "${form.name.trim()}" must be 0 or more.`);
-                return;
+                return false;
             }
             built[form.name.trim()] = result.pool;
         }
@@ -173,15 +171,17 @@ export default function ApiConnectionPoolsModule() {
             });
             if (!resp.success) {
                 toast.error(resp.error?.message || "Update failed.");
-                return;
+                return false;
             }
             setVersion(resp.configVersion);
             markSaved(pools);
             invalidateApiConnectionPoolNames();
 
             toast.success(uiText("config.poolsUpdated"));
+            return true;
         } catch {
             toast.error("Update failed.");
+            return false;
         } finally {
             setSaving(false);
         }
@@ -189,6 +189,12 @@ export default function ApiConnectionPoolsModule() {
 
     const disabled = loading || saving || version === undefined;
     const deleteTarget = pools.find((p) => p.id === deleteTargetId) ?? null;
+
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => dirty,
+        onSave: !(loading || version === undefined) ? onUpdate : undefined,
+        what: "page",
+    });
 
     return (
         <Card className="w-full shadow-sm">
@@ -205,7 +211,7 @@ export default function ApiConnectionPoolsModule() {
                     onClick={addPool}
                     disabled={disabled}
                 >
-                    <PlusCircle className="h-4 w-4" />
+                    <Plus className="h-4 w-4" />
                     Add pool
                 </Button>
             </CardHeader>
@@ -312,6 +318,7 @@ export default function ApiConnectionPoolsModule() {
                 )}
             </CardContent>
 
+            {unsavedDialog}
             <ActionBar
                 onUpdate={onUpdate}
                 dirty={dirty}

@@ -41,12 +41,17 @@ import { UsedByAgents } from "@/shared/UsedByAgents";
 import { FieldLabel } from "@/shared/FieldLabel";
 import { useFieldHelp, useFieldTitle } from "@/shared/fieldHelp";
 import { KeyValueRows } from "@/shared/KeyValueRows";
-import { rowsFromValueMap, rowsToValueMap, type KeyValueRow } from "@/shared/keyValueMap";
+import {
+    rowsFromValueMap,
+    rowsToValueMap,
+    rowValueFields,
+    type KeyValueRow,
+} from "@/shared/keyValueMap";
 import { ConnectionPoolNameField } from "@/shared/apiConnectionPools";
 import { DEFAULT_POOL_NAME } from "@/shared/apiConnectionPoolNames";
 import { errorText } from "@/shared/apiError";
 import { uiText } from "@/shared/uiText";
-import { MAX_LENGTHS } from "@/shared/schemaRules";
+import { EXPR_TEXT, MAX_LENGTHS, textFieldsError } from "@/shared/schemaRules";
 
 const COMMAND_CAN_OVERRIDE = "Command can override";
 
@@ -125,7 +130,12 @@ export default function ApiConfigDetailModule() {
     }
 
     const payload = UI.useModulePayload<{ name?: string; isNew?: boolean }>();
-    const fh = useFieldHelp("ApiServerModel", "ApiConnectionPoolModel", "TimeoutModel");
+    const fh = useFieldHelp(
+        "ApiServerModel",
+        "ApiConnectionPoolModel",
+        "TimeoutModel",
+        "ValueModel",
+    );
     const ft = useFieldTitle("ApiServerModel", "ValueModel");
     const dynamic = useDynamicFields("ApiServerModel");
     const [loading, setLoading] = useState(true);
@@ -209,6 +219,16 @@ export default function ApiConfigDetailModule() {
 
         if (!api.name.trim()) {
             toast.error("API name is required");
+            return false;
+        }
+
+        const text = textFieldsError(EXPR_TEXT, [
+            { label: "The URL", value: api.url },
+            ...rowValueFields(api.headersRows, "Header"),
+            ...rowValueFields(api.queryParamRows, "Query parameter"),
+        ]);
+        if (text) {
+            toast.error(text);
             return false;
         }
 
@@ -315,7 +335,7 @@ export default function ApiConfigDetailModule() {
         (savedSnapshotRef.current === null || snapshotOf(api) !== savedSnapshotRef.current);
 
     const { dialog: unsavedDialog, release: releaseGuard } = useUnsavedChanges({
-        what: "api",
+        what: "API profile",
         isDirty: () => {
             const current = collRef.current[index];
             if (!current) return false;
@@ -385,7 +405,7 @@ export default function ApiConfigDetailModule() {
                 </CardHeader>
 
                 <CardContent className="p-0">
-                    <div className="max-w-4xl space-y-6 px-4 pb-4">
+                    <div className="max-w-4xl space-y-6 px-6 pb-4">
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="grid gap-2 md:col-span-2">
                                 <FieldLabel help={fh("url")} htmlFor={`api-url-${index}`}>
@@ -570,7 +590,7 @@ export default function ApiConfigDetailModule() {
                                 <Trash2 className="h-4 w-4" />
                                 Delete
                             </Button>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="order-last basis-full text-xs text-muted-foreground sm:order-none sm:basis-auto">
                                 {isUsed
                                     ? uiText("delete.apiInUse")
                                     : uiText("delete.cannotBeUndone")}

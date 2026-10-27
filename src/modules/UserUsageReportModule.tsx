@@ -14,7 +14,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react";
+import { RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
 import type { ReportRange } from "@/shared/ReportRange";
@@ -35,6 +35,7 @@ import { RankBar } from "@/shared/RankBar";
 import type { ChartConfig } from "@/components/ui/chart";
 import { ApiError } from "@/shared/apiError";
 import { uiText } from "@/shared/uiText";
+import { Pager } from "@/shared/Pager";
 
 const PAGE_SIZE = 10;
 
@@ -253,32 +254,17 @@ export default function UserUsageReportModule() {
                     </Table>
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
-                    <div className="text-xs opacity-70">
-                        Page {report?.page ?? page} of {pageCount} •{" "}
-                        {fmtCount(report?.totalRows ?? 0)} users
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            disabled={loading || page <= 1}
-                        >
-                            <ChevronLeft className="h-4 w-4 mr-1" />
-                            Prev
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                            disabled={loading || page >= pageCount}
-                        >
-                            Next
-                            <ChevronRight className="h-4 w-4 ml-1" />
-                        </Button>
-                    </div>
-                </div>
+                <Pager
+                    page={(report?.page ?? page) - 1}
+                    pageCount={pageCount}
+                    total={report?.totalRows ?? 0}
+                    totalLabel="users"
+                    loading={loading}
+                    onFirst={() => setPage(1)}
+                    onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                    onNext={() => setPage((p) => Math.min(pageCount, p + 1))}
+                    onLast={() => setPage(pageCount)}
+                />
             </CardContent>
         </Card>
     );

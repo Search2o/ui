@@ -6,7 +6,6 @@ import {
     FileText,
     MessageSquare,
     PenLine,
-    Workflow,
     Wrench,
 } from "lucide-react";
 import { uiText } from "@/shared/uiText";
@@ -29,7 +28,6 @@ export const OUTPUT_CATEGORY_ORDER: OutputCategory[] = [
     TraceType.input,
     TraceType.output,
     TraceType.tool,
-    TraceType.invoke,
     TraceType.error,
 ];
 
@@ -69,11 +67,6 @@ export const OUTPUT_CATEGORY_INFO: Record<OutputCategory, OutputCategoryInfo> = 
         Icon: Wrench,
         tone: "bg-orange-500/15 text-orange-600 dark:text-orange-300",
     },
-    invoke: {
-        label: "Invoke",
-        Icon: Workflow,
-        tone: "bg-teal-500/15 text-teal-600 dark:text-teal-300",
-    },
     error: {
         label: "Error",
         Icon: AlertTriangle,
@@ -99,8 +92,6 @@ export function outputCategoryHint(category: OutputCategory): string {
             return uiText("trace.results");
         case TraceType.tool:
             return uiText("trace.tools");
-        case TraceType.invoke:
-            return uiText("trace.agents");
         case TraceType.error:
             return uiText("trace.errors");
     }

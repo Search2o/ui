@@ -108,7 +108,6 @@ export function AskInputsForm({
             <div className="mt-4 flex justify-end">
                 <Button
                     type="button"
-                    variant="outline"
                     disabled={disabled}
                     onClick={() => onSubmit(nestAnswers(blocks, values))}
                 >

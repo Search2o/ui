@@ -28,13 +28,16 @@ export function Pager({
     onNext: () => void;
     onLast: () => void;
 }) {
+    const plural = totalLabel ?? "total";
+    const noun = total === 1 && plural.endsWith("s") ? plural.slice(0, -1) : plural;
+
     const atFirst = page <= 0;
     const atLast = page >= pageCount - 1;
 
     if (pageCount <= 1 && !hasMore && !loading) {
         return total != null ? (
             <div className="text-xs text-muted-foreground">
-                {total} {totalLabel ?? "total"}
+                {total} {noun}
             </div>
         ) : null;
     }
@@ -46,7 +49,7 @@ export function Pager({
                 <span>
                     Page {page + 1}
                     {showPageCount ? ` of ${pageCount}` : ""}
-                    {total != null ? ` · ${total} ${totalLabel ?? "total"}` : ""}
+                    {total != null ? ` · ${total} ${noun}` : ""}
                 </span>
             </div>
             <div className="flex items-center gap-1">

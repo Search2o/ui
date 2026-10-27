@@ -13,7 +13,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react";
+import { RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import { HoverTip } from "@/shared/HoverTip";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
@@ -33,6 +33,7 @@ import { RankBar } from "@/shared/RankBar";
 import type { ChartConfig } from "@/components/ui/chart";
 import { ApiError } from "@/shared/apiError";
 import { uiText } from "@/shared/uiText";
+import { Pager } from "@/shared/Pager";
 
 type SortKey = keyof Pick<
     AgentCostRow,
@@ -261,31 +262,17 @@ export default function AgentCostReportModule() {
                     </Table>
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
-                    <div className="text-xs opacity-70">
-                        Page {page} of {pageCount} • Showing {pageRows.length} of {rows.length}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            disabled={page <= 1}
-                        >
-                            <ChevronLeft className="h-4 w-4 mr-1" />
-                            Prev
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                            disabled={page >= pageCount}
-                        >
-                            Next
-                            <ChevronRight className="h-4 w-4 ml-1" />
-                        </Button>
-                    </div>
-                </div>
+                <Pager
+                    page={page - 1}
+                    pageCount={pageCount}
+                    total={rows.length}
+                    totalLabel="agents"
+                    loading={false}
+                    onFirst={() => setPage(1)}
+                    onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                    onNext={() => setPage((p) => Math.min(pageCount, p + 1))}
+                    onLast={() => setPage(pageCount)}
+                />
             </CardContent>
         </Card>
     );

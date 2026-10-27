@@ -6,7 +6,6 @@ export const DRAFT_HELP_MAX = MAX_LENGTHS.DRAFT_HELP_PROMPT.max;
 
 const GROUP_ORDER: [string, string][] = [
     ["llm", "LLM"],
-    ["prompt", "Prompt"],
     ["api", "API"],
     ["db", "Database"],
     ["mcp", "MCP"],

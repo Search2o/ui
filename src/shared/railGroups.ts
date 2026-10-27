@@ -1,5 +1,6 @@
-import type { UserRole } from "@/orval/search2o.schemas";
+import { ServiceLevel, type UserRole } from "@/orval/search2o.schemas";
 import * as UI from "@/shared/uistate";
+import { isBilled } from "@/shared/serviceLevel";
 
 export type RailItem = {
     label: string;
@@ -7,6 +8,7 @@ export type RailItem = {
     aliases?: UI.ModuleKey[];
     adminOnly?: boolean;
     ownerOnly?: boolean;
+    paidOnly?: boolean;
 };
 
 export type RailGroup = { label: string; items: RailItem[] };
@@ -23,7 +25,6 @@ export const DEV_GROUPS: RailGroup[] = [
         label: "Profiles",
         items: [
             { label: "LLM", key: "LlmProfile", aliases: ["LlmProfileDetail"] },
-            { label: "Prompt", key: "PromptConfig", aliases: ["PromptConfigDetail"] },
             { label: "API", key: "ApiConfig", aliases: ["ApiConfigDetail"] },
             { label: "Database", key: "DbConfig", aliases: ["DbConfigDetail"] },
             { label: "MCP", key: "MCPConfig", aliases: ["MCPConfigDetail"] },
@@ -77,7 +78,7 @@ export const BILLING_GROUP: RailGroup = {
     label: "Billing",
     items: [
         { label: "Account", key: "Account", ownerOnly: true },
-        { label: "Invoices", key: "Billing", ownerOnly: true },
+        { label: "Invoices", key: "Billing", ownerOnly: true, paidOnly: true },
     ],
 };
 
@@ -88,7 +89,11 @@ export function canSeeDevActions(role: UserRole | null | undefined): boolean {
     return role === "developer" || canSeeAdminActions(role);
 }
 
-export function railGroupsFor(role: UserRole | null | undefined): RailGroup[] {
+export function railGroupsFor(
+    role: UserRole | null | undefined,
+    serviceLevel?: string | null,
+): RailGroup[] {
+    const billed = isBilled(serviceLevel || ServiceLevel.free);
     return [
         ...(canSeeDevActions(role) ? DEV_GROUPS : []),
         ...(canSeeAdminActions(role) ? [ADMIN_GROUP, BILLING_GROUP] : []),
@@ -98,7 +103,8 @@ export function railGroupsFor(role: UserRole | null | undefined): RailGroup[] {
             items: group.items.filter(
                 (item) =>
                     (canSeeAdminActions(role) || !item.adminOnly) &&
-                    (role === "owner" || !item.ownerOnly),
+                    (role === "owner" || !item.ownerOnly) &&
+                    (billed || !item.paidOnly),
             ),
         }))
         .filter((group) => group.items.length > 0);

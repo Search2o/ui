@@ -4,12 +4,10 @@ export function UsedByAgents({
     names,
     onOpen,
     collapsedCount = 6,
-    verb = "Used by",
 }: {
     names: string[];
     onOpen: (agentName: string) => void;
     collapsedCount?: number;
-    verb?: string;
 }) {
     const [showAll, setShowAll] = useState(false);
     if (names.length === 0) return null;
@@ -18,7 +16,7 @@ export function UsedByAgents({
     return (
         <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
             <span>
-                {verb} {names.length} agent{names.length === 1 ? "" : "s"}:
+                Used by {names.length} agent{names.length === 1 ? "" : "s"}:
             </span>
             {shown.map((agentName) => (
                 <button

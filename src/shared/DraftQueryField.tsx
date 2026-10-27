@@ -1,7 +1,6 @@
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import type { ReactNode, Ref } from "react";
 import { HoverTip } from "@/shared/HoverTip";
+import { Composer } from "@/shared/Composer";
 import { uiText } from "@/shared/uiText";
 
 export function DraftQueryField({
@@ -12,6 +11,8 @@ export function DraftQueryField({
     onValidationQueryChange,
     onFollowupQueryChange,
     onStartOver,
+    action,
+    inputRef,
 }: {
     inConversation: boolean;
     validationQuery: string;
@@ -20,50 +21,51 @@ export function DraftQueryField({
     onValidationQueryChange: (value: string) => void;
     onFollowupQueryChange: (value: string) => void;
     onStartOver: () => void;
+    action?: ReactNode;
+    inputRef?: Ref<HTMLTextAreaElement>;
 }) {
+    const label = inConversation ? "Follow-up question" : "Validation query";
     return (
-        <>
-            <div className="flex items-center justify-between gap-3">
-                <HoverTip
-                    tip={
-                        inConversation
-                            ? uiText("draft.followupHelp")
-                            : uiText("draft.validationQueryHelp")
-                    }
-                >
-                    <Label htmlFor="validationQuery" className="text-sm">
-                        {inConversation ? "Follow-up question" : "Validation query"}
-                    </Label>
-                </HoverTip>
-                {inConversation ? (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
-                        disabled={disabled}
-                        onClick={onStartOver}
+        <Composer
+            ref={inputRef}
+            id="validationQuery"
+            aria-label={label}
+            rows={2}
+            value={inConversation ? followupQuery : validationQuery}
+            onChange={(e) =>
+                inConversation
+                    ? onFollowupQueryChange(e.target.value)
+                    : onValidationQueryChange(e.target.value)
+            }
+            placeholder={
+                inConversation ? "Ask this conversation another question." : "A typical user query."
+            }
+            options={
+                <>
+                    <HoverTip
+                        tip={
+                            inConversation
+                                ? uiText("draft.followupHelp")
+                                : uiText("draft.validationQueryHelp")
+                        }
                     >
-                        Start over with the validation query
-                    </Button>
-                ) : null}
-            </div>
-            <Textarea
-                id="validationQuery"
-                rows={2}
-                className="mt-1 min-h-0 text-sm"
-                value={inConversation ? followupQuery : validationQuery}
-                onChange={(e) =>
-                    inConversation
-                        ? onFollowupQueryChange(e.target.value)
-                        : onValidationQueryChange(e.target.value)
-                }
-                placeholder={
-                    inConversation
-                        ? "Ask this conversation another question, or start over above."
-                        : "A typical user query."
-                }
-            />
-        </>
+                        <span className="cursor-help px-1 text-xs text-muted-foreground">
+                            {label}
+                        </span>
+                    </HoverTip>
+                    {inConversation ? (
+                        <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={onStartOver}
+                            className="rounded px-1 text-xs text-primary underline-offset-2 hover:underline disabled:opacity-50"
+                        >
+                            Start over with the validation query
+                        </button>
+                    ) : null}
+                </>
+            }
+            action={action}
+        />
     );
 }

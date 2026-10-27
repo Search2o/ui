@@ -234,7 +234,7 @@ export default function AuditLogModule() {
                                 return (
                                     <li
                                         key={`${n.createdAt}:${idx}`}
-                                        className="flex items-start justify-between gap-4 px-4 py-3"
+                                        className="flex flex-col-reverse gap-1 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
                                     >
                                         <div className="min-w-0 space-y-1">
                                             <div className="break-words text-sm">

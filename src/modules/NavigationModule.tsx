@@ -47,6 +47,7 @@ import {
     canSeeDevActions as isDeveloper,
     railGroupsFor,
 } from "@/shared/railGroups";
+import { roleLabel } from "@/shared/roleLabels";
 
 function LoadingInline() {
     return (
@@ -122,8 +123,6 @@ const CRUMBS: Record<UI.ModuleKey, string[]> = {
     ApiConfigDetail: ["Profiles", "API profiles", "Profile"],
     DbConfig: ["Profiles", "Database profiles"],
     DbConfigDetail: ["Profiles", "Database profiles", "Profile"],
-    PromptConfig: ["Profiles", "Prompt profiles"],
-    PromptConfigDetail: ["Profiles", "Prompt profiles", "Profile"],
     AgentPerformanceReport: ["Reports", "Agent performance"],
     AgentCostReport: ["Reports", "Agent cost"],
     UserUsageReport: ["Reports", "User usage"],
@@ -241,15 +240,8 @@ function useRecentConversations(enabled: boolean) {
     return { pinned, recent, hasMore, loadMore, togglePin, rename, remove };
 }
 
-const ROLE_LABELS: Record<string, string> = {
-    user: "User",
-    developer: "Developer",
-    admin: "Administrator",
-    owner: "Account Owner",
-};
-
 export default function NavigationModule() {
-    const { user, accountName, signOut } = useSession();
+    const { user, accountName, serviceLevel, signOut } = useSession();
 
     const open = UI.openModule;
     const active = UI.useActiveModule();
@@ -310,7 +302,7 @@ export default function NavigationModule() {
         if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) loadMoreRecent();
     };
 
-    const groups: RailGroup[] = railGroupsFor(role);
+    const groups: RailGroup[] = railGroupsFor(role, serviceLevel);
 
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
         try {
@@ -608,7 +600,7 @@ export default function NavigationModule() {
                                     {user?.userName ?? user?.email ?? "User"}
                                 </span>
                                 <span className="block truncate text-[11px] text-[#7d908c]">
-                                    {role ? (ROLE_LABELS[role] ?? role) : ""}
+                                    {roleLabel(role)}
                                 </span>
                             </span>
                             <ChevronUp className="h-4 w-4 shrink-0 opacity-50" />

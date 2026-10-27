@@ -8,10 +8,10 @@ import type {
 } from "@/orval/search2o.schemas";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, SendHorizontal, Trash2 } from "lucide-react";
+import { Composer } from "@/shared/Composer";
 import { useJsonStream, type StreamJsonMessage } from "@/shared/useJsonStream";
 import { AskInputsForm, type AskBlockAnswers, type AskBlocks } from "@/shared/AskInputsForm";
 import { hasAskBlocks } from "@/shared/askBlocks";
@@ -659,9 +659,8 @@ export default function SearchConversationModule() {
 
                     <div className="space-y-2 pt-2 border-t">
                         <div>
-                            <Textarea
+                            <Composer
                                 rows={3}
-                                className="resize-none"
                                 placeholder={followupPlaceholder}
                                 value={searchBox1}
                                 onChange={(e) => {
@@ -682,6 +681,21 @@ export default function SearchConversationModule() {
                                         : undefined
                                 }
                                 disabled={!canSubmit || !!pendingAsk}
+                                action={
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => void submitFollowup()}
+                                        disabled={!canSubmit || !!pendingAsk || !searchBox1.trim()}
+                                    >
+                                        {matching ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                                        ) : (
+                                            <SendHorizontal className="h-4 w-4" aria-hidden />
+                                        )}
+                                        Send
+                                    </Button>
+                                }
                             />
                         </div>
 

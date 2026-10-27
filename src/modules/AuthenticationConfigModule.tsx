@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { invalidatePasswordHelp } from "@/shared/passwordHelp";
-import { useUnsavedWork } from "@/shared/sessionExpiry";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
 import { ChevronRight } from "lucide-react";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
 import { UpdatedBy } from "@/shared/UpdatedBy";
@@ -90,7 +90,6 @@ export default function AuthenticationConfigModule() {
     const ft = useFieldTitle(...MODELS);
 
     const dirty = model !== null && JSON.stringify(model) !== JSON.stringify(res?.configValue);
-    useUnsavedWork(() => dirty);
 
     useEffect(() => {
         let mounted = true;
@@ -197,8 +196,8 @@ export default function AuthenticationConfigModule() {
         if (!oidc.returnUrl?.trim()) ssoMissing.push("return address");
     }
 
-    const onSave = async () => {
-        if (!model || version === null) return;
+    const onSave = async (): Promise<boolean> => {
+        if (!model || version === null) return false;
         setSaving(true);
         try {
             const resp = await API.updateSystemConfigPart({
@@ -207,7 +206,7 @@ export default function AuthenticationConfigModule() {
             });
             if (!resp.success) {
                 toast.error(resp.error?.message ?? "Failed to update settings");
-                return;
+                return false;
             }
             const fresh = await API.getSystemConfigPart({ part: "auth" });
             if (fresh.success) {
@@ -231,8 +230,10 @@ export default function AuthenticationConfigModule() {
             toast.success(
                 `Authentication settings have been updated. ${uiText("config.appliesImmediately")}`,
             );
+            return true;
         } catch (e) {
             toast.error(errorText(e, "Failed to update settings"));
+            return false;
         } finally {
             setSaving(false);
         }
@@ -246,6 +247,12 @@ export default function AuthenticationConfigModule() {
             ? uiText("auth.keepPasswordsOn")
             : uiText("auth.passwordsNeedSso");
     const showPasswordSwitch = showSso || !passwordsAllowed;
+
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => dirty,
+        onSave: canSave && builtin && ssoMissing.length === 0 ? onSave : undefined,
+        what: "page",
+    });
 
     return (
         <Card>
@@ -723,6 +730,7 @@ export default function AuthenticationConfigModule() {
                 )}
             </CardContent>
 
+            {unsavedDialog}
             <ActionBar
                 onUpdate={onSave}
                 dirty={dirty}

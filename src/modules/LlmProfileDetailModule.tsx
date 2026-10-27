@@ -47,6 +47,7 @@ import {
     rowsFromTextMap,
     rowsSnapshot,
     rowsToTextMap,
+    rowValueFields,
     type KeyValueRow,
 } from "@/shared/keyValueMap";
 import {
@@ -60,7 +61,7 @@ import { ConnectionPoolNameField } from "@/shared/apiConnectionPools";
 import { DEFAULT_POOL_NAME } from "@/shared/apiConnectionPoolNames";
 import { errorText } from "@/shared/apiError";
 import { uiText } from "@/shared/uiText";
-import { MAX_LENGTHS } from "@/shared/schemaRules";
+import { EXPR_TEXT, MAX_LENGTHS, textFieldsError } from "@/shared/schemaRules";
 
 type EditableLlmModel = Partial<Omit<LlmModel, "name">>;
 
@@ -340,6 +341,16 @@ export default function LlmProfileDetailModule() {
             return null;
         }
 
+        const text = textFieldsError(EXPR_TEXT, [
+            { label: "The URL", value: (profile.model.url ?? "").trim() },
+            ...rowValueFields(profile.headersRows, "Header"),
+            ...rowValueFields(profile.queryParamRows, "Query parameter"),
+        ]);
+        if (text) {
+            toast.error(text);
+            return null;
+        }
+
         const parsed = parseJsonObject(profile.additionalParamsText);
         if (!parsed.ok) {
             toast.error(`Fix additionalParams JSON for "${trimmedName}" before saving.`);
@@ -348,7 +359,7 @@ export default function LlmProfileDetailModule() {
 
         const pricing = textToPricing(profile.priceText);
         if (!pricing.ok) {
-            toast.error(`${pricing.error} (profile "${trimmedName}")`);
+            toast.error(pricing.error);
             return null;
         }
 
@@ -553,7 +564,7 @@ export default function LlmProfileDetailModule() {
                 </CardHeader>
 
                 <CardContent className="p-0">
-                    <div className="space-y-6 px-4 py-4">
+                    <div className="space-y-6 px-6 py-4">
                         <div className="space-y-3">
                             <div className="text-xs font-semibold tracking-wide text-muted-foreground">
                                 Model &amp; server
@@ -622,7 +633,7 @@ export default function LlmProfileDetailModule() {
                                     </div>
 
                                     <Select
-                                        value={model.adapter || undefined}
+                                        value={model.adapter ?? ""}
                                         onValueChange={(value) =>
                                             updateModel(profile.uiId, { adapter: value })
                                         }
@@ -952,7 +963,7 @@ export default function LlmProfileDetailModule() {
                                 <Trash2 className="h-4 w-4" />
                                 Delete
                             </Button>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="order-last basis-full text-xs text-muted-foreground sm:order-none sm:basis-auto">
                                 {profile.usedBy.length > 0
                                     ? uiText("delete.llmInUse")
                                     : uiText("delete.profileCannotBeUndone")}

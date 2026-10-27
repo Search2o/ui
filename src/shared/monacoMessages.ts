@@ -1,4 +1,5 @@
 import type * as monacoT from "monaco-editor";
+import { EXPR_CHARACTERS_RULE, EXPR_TEXT } from "@/shared/schemaRules";
 
 const PATTERN_MESSAGE = /^String does not match the pattern of "(.*)"\.$/s;
 
@@ -19,10 +20,7 @@ const PATTERN_RULES: Record<string, PatternRule> = {
         subject: "value",
         rule: "must be an expression wrapped in braces, for example { sys.query }",
     },
-    "^(?:\\{[\\x20-\\x7E\\t\\r\\n]*\\}|[^{][\\s\\S]*|\\{(?:[\\s\\S]*[^}])?|)$": {
-        subject: "value",
-        rule: "is an expression carrying a character that cannot be typed on a keyboard — a curly quote or a non-breaking space, usually pasted from a document",
-    },
+    [EXPR_TEXT.pattern]: { subject: "value", rule: EXPR_CHARACTERS_RULE },
     "^(?:\\s*(?:[^{\\s][\\s\\S]*)?|[\\s\\S]*[^\\s}]\\s*)$": {
         subject: "value",
         rule: "must be plain text, not an expression in braces",

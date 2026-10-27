@@ -27,8 +27,6 @@ export type ModuleKey =
     | "AgentServerConfig"
     | "ApiConnectionPools"
     | "HooksConfig"
-    | "PromptConfig"
-    | "PromptConfigDetail"
     | "AuthenticationConfig"
     | "ServiceAccounts"
     | "AgentPerformanceReport"
@@ -74,8 +72,6 @@ export const MODULE_IMPORTS: Record<ModuleKey, () => Promise<{ default: React.Co
     AgentServerConfig: () => import("@/modules/AgentServerConfigModule"),
     ApiConnectionPools: () => import("@/modules/ApiConnectionPoolsModule"),
     HooksConfig: () => import("@/modules/HooksConfigModule"),
-    PromptConfig: () => import("@/modules/PromptConfigModule"),
-    PromptConfigDetail: () => import("@/modules/PromptConfigDetailModule"),
     AuthenticationConfig: () => import("@/modules/AuthenticationConfigModule"),
     ServiceAccounts: () => import("@/modules/ServiceAccountsModule"),
 

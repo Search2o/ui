@@ -233,7 +233,7 @@ export default function UserViewModule() {
 
                     <Separator />
 
-                    <div className="flex items-center justify-between gap-3 p-4">
+                    <div className="flex items-center justify-between gap-3 px-6 py-4">
                         <span className="text-xs text-muted-foreground">
                             {uiText("delete.userCannotBeUndone")}
                         </span>

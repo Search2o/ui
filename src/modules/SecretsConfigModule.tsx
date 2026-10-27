@@ -34,7 +34,11 @@ const DEFAULT_TRANSFORM: SecretTransformModel = {
     replace: "_",
     convertTo: "none",
 };
-export function SecretsSection() {
+export function SecretsSection({
+    onDirtyChange,
+}: {
+    onDirtyChange?: (dirty: boolean) => void;
+} = {}) {
     const fh = useFieldHelp("AgentSecretsModel", "SecretTransformModel");
     const ft = useFieldTitle("AgentSecretsModel");
     const [res, setRes] = useState<ConfigPartResponseModel | null>(null);
@@ -44,7 +48,9 @@ export function SecretsSection() {
     const [version, setVersion] = useState<number | undefined>(undefined);
     const [configPart, setConfigPart] = useState<AgentSecretsModel>({});
 
-    useUnsavedWork(() => JSON.stringify(configPart) !== JSON.stringify(res?.configValue));
+    const dirty = JSON.stringify(configPart) !== JSON.stringify(res?.configValue);
+    useUnsavedWork(() => dirty);
+    useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
     useEffect(() => {
         let isMounted = true;
@@ -129,7 +135,7 @@ export function SecretsSection() {
                         </FieldLabel>
                     </div>
                     <Select
-                        value={configPart.secretSource}
+                        value={configPart.secretSource ?? "env"}
                         onValueChange={(v) => onChangeReadFrom(v as SecretSource)}
                         disabled={loading}
                     >

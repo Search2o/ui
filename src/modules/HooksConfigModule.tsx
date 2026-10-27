@@ -9,7 +9,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { useUnsavedWork } from "@/shared/sessionExpiry";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
 import { ActionBar } from "@/shared/ActionBar";
 import { useSavedBaseline } from "@/shared/savedBaseline";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
@@ -53,7 +53,6 @@ const PART_LABELS: Partial<Record<AgentConfigPart, string>> = {
     api: "API profiles",
     mcp: "MCP servers",
     db: "Database profiles",
-    prompt: "Prompt profiles",
 };
 
 export default function HooksConfigModule() {
@@ -65,7 +64,6 @@ export default function HooksConfigModule() {
     const [isLoading, setIsLoading] = useState(true);
 
     const { dirty, markSaved } = useSavedBaseline(form);
-    useUnsavedWork(() => dirty);
 
     useEffect(() => {
         let cancelled = false;
@@ -92,8 +90,8 @@ export default function HooksConfigModule() {
         };
     }, [markSaved]);
 
-    const onUpdate = async () => {
-        if (!loaded || !form || hasInvalidPaths(form)) return;
+    const onUpdate = async (): Promise<boolean> => {
+        if (!loaded || !form || hasInvalidPaths(form)) return false;
         setIsSaving(true);
         try {
             const nextConfigPart = formToHooks(form);
@@ -103,7 +101,7 @@ export default function HooksConfigModule() {
             });
             if (!resp.success) {
                 toast.error(resp.error?.message || "Failed to update the hooks.");
-                return;
+                return false;
             }
             toast.success(uiText("config.hooksUpdated"));
             setLoaded({
@@ -114,8 +112,10 @@ export default function HooksConfigModule() {
             const saved = hooksToForm(nextConfigPart);
             setForm(saved);
             markSaved(saved);
+            return true;
         } catch {
             toast.error("Failed to update the hooks.");
+            return false;
         } finally {
             setIsSaving(false);
         }
@@ -151,6 +151,12 @@ export default function HooksConfigModule() {
             disabled={isLoading}
         />
     );
+
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => dirty,
+        onSave: !(isLoading || anyInvalid) ? onUpdate : undefined,
+        what: "page",
+    });
 
     return (
         <Card className="w-full">
@@ -227,6 +233,7 @@ export default function HooksConfigModule() {
                 </section>
             </CardContent>
 
+            {unsavedDialog}
             <ActionBar
                 onUpdate={onUpdate}
                 dirty={dirty}

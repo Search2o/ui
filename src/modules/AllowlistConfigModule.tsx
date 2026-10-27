@@ -4,7 +4,7 @@ import type { ConfigPartResponseModel, EvalAllowlistModel } from "@/orval/search
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { useUnsavedWork } from "@/shared/sessionExpiry";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
 import { AlertTriangle } from "lucide-react";
 import { ActionBar } from "@/shared/ActionBar";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
@@ -34,7 +34,6 @@ export default function AllowlistConfigModule() {
     const dirty =
         configPart !== null &&
         entriesOf(text).join("\n") !== (configPart.allowlist ?? []).join("\n");
-    useUnsavedWork(() => dirty);
 
     useEffect(() => {
         let cancelled = false;
@@ -66,8 +65,8 @@ export default function AllowlistConfigModule() {
     const marks = errorsByLine(text, lineErrors);
     const hasErrors = marks.some(Boolean);
 
-    const onUpdate = async () => {
-        if (!model || !configPart) return;
+    const onUpdate = async (): Promise<boolean> => {
+        if (!model || !configPart) return false;
         setIsSaving(true);
         try {
             const allowlistList = entriesOf(text);
@@ -91,7 +90,7 @@ export default function AllowlistConfigModule() {
                         ? uiText("allowlist.errors")
                         : resp.error?.message || "Failed to update allowlist",
                 );
-                return;
+                return false;
             }
 
             setLineErrors({});
@@ -100,12 +99,20 @@ export default function AllowlistConfigModule() {
             setModel({ ...model, configValue: nextConfigPart, configVersion: resp.configVersion });
             setConfigPart(nextConfigPart);
             setText(nextConfigPart.allowlist?.join("\n") || "");
+            return true;
         } catch {
             toast.error("Failed to update allowlist");
+            return false;
         } finally {
             setIsSaving(false);
         }
     };
+
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => dirty,
+        onSave: !isLoading ? onUpdate : undefined,
+        what: "page",
+    });
 
     return (
         <Card className="w-full">
@@ -133,7 +140,7 @@ export default function AllowlistConfigModule() {
                         onChange={setText}
                         lineErrors={marks}
                         placeholder={"builtins.len\nmath.sqrt\ndatetime.datetime"}
-                        className="min-h-64"
+                        className="max-h-[60vh] min-h-64"
                         wrapperClassName="max-w-3xl"
                         disabled={isLoading}
                         aria-invalid={hasErrors ? true : undefined}
@@ -141,6 +148,7 @@ export default function AllowlistConfigModule() {
                 </div>
             </CardContent>
 
+            {unsavedDialog}
             <ActionBar onUpdate={onUpdate} dirty={dirty} busy={isSaving} disabled={isLoading} />
         </Card>
     );

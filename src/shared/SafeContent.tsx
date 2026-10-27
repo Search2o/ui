@@ -15,14 +15,12 @@ type SafeContentProps = {
 };
 
 export const SafeContent: React.FC<SafeContentProps> = ({ part }) => {
-    const { contentType } = part;
-
-    if (contentType === "image") {
-        if (part.text && part.mimeType) {
+    if (part.contentType === "image") {
+        if (part.data && part.mimeType) {
             return (
                 <div className="mt-2">
                     <img
-                        src={`data:${part.mimeType};base64,${part.text}`}
+                        src={`data:${part.mimeType};base64,${part.data}`}
                         alt="Image output"
                         className="max-h-[320px] max-w-full rounded-md border object-contain"
                     />
@@ -32,8 +30,7 @@ export const SafeContent: React.FC<SafeContentProps> = ({ part }) => {
         return null;
     }
 
-    if (contentType === "text") return <MarkdownText text={part.text} />;
-    return <SanitizedHtml html={part.text} />;
+    return <MarkdownText text={part.text} />;
 };
 
 export const MarkdownText: React.FC<{ text: string }> = ({ text }) => (

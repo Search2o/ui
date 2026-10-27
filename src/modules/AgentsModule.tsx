@@ -19,9 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CheckCircle2, RefreshCcw } from "lucide-react";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
-import { SortHeaderButton, type SortDir } from "@/shared/SortHeaderButton";
-import { ariaSort } from "@/shared/reportFormat";
+import { SortHeaderButton } from "@/shared/SortHeaderButton";
+import { compareText, textMatches, useColumnSort } from "@/shared/columnSort";
 import { uiText } from "@/shared/uiText";
+import { fmtLocalShort } from "@/shared/commonFuncs";
 
 type SortKey = "agentName" | "agentTitle" | "agentTag" | "developer" | "modified" | "indexed";
 
@@ -30,7 +31,7 @@ function formatEpoch(ms: number | string | undefined): string {
     const n = typeof ms === "string" ? Number(ms) : ms;
     if (!Number.isFinite(n)) return "";
     try {
-        return new Date(n).toLocaleString();
+        return fmtLocalShort(n);
     } catch {
         return String(ms);
     }
@@ -54,84 +55,35 @@ export default function AgentsModule() {
         };
     });
 
-    const [titleFilter, setTitleFilter] = usePersistentState("agents.titleFilter", "");
+    const [filter, setFilter] = usePersistentState("agents.titleFilter", "");
     const [onlyUnindexed, setOnlyUnindexed] = usePersistentState("agents.onlyUnindexed", false);
-    const [sortKey, setSortKey] = usePersistentState<SortKey>("agents.sortKey", "modified");
-    const [sortDir, setSortDir] = usePersistentState<SortDir>("agents.sortDir", "desc");
+    const sort = useColumnSort<SortKey>("agents", "modified", "desc");
 
     const unindexedCount = useMemo(() => agents.filter((a) => !a?.isIndexed).length, [agents]);
 
     const filtered = useMemo(() => {
-        let filtered = titleFilter
-            ? agents.filter((a) =>
-                  (a?.agentTitle ?? "").toLowerCase().includes(titleFilter.toLowerCase()),
-              )
-            : agents.slice();
-        if (onlyUnindexed) filtered = filtered.filter((a) => !a?.isIndexed);
+        const rows = agents.filter(
+            (a) =>
+                textMatches(filter, a.agentName, a.agentTitle, a.agentTag) &&
+                (!onlyUnindexed || !a.isIndexed),
+        );
+        const by: Record<SortKey, (a: AgentItemModel, b: AgentItemModel) => number> = {
+            agentName: (a, b) => compareText(a.agentName, b.agentName),
+            agentTitle: (a, b) => compareText(a.agentTitle, b.agentTitle),
+            agentTag: (a, b) => compareText(a.agentTag, b.agentTag),
+            developer: (a, b) => compareText(a.lastUpdatedByName, b.lastUpdatedByName),
+            modified: (a, b) => Number(a.agentVersion ?? 0) - Number(b.agentVersion ?? 0),
+            indexed: (a, b) => Number(Boolean(a.isIndexed)) - Number(Boolean(b.isIndexed)),
+        };
+        const cmp = by[sort.key];
+        return rows.sort((a, b) => cmp(a, b) * sort.sign);
+    }, [agents, filter, onlyUnindexed, sort.key, sort.sign]);
 
-        return filtered.sort((a, b) => {
-            const dir = sortDir === "asc" ? 1 : -1;
-
-            if (sortKey === "agentName") {
-                const av = (a?.agentName ?? "").toLowerCase();
-                const bv = (b?.agentName ?? "").toLowerCase();
-                if (av < bv) return -1 * dir;
-                if (av > bv) return 1 * dir;
-                return 0;
-            }
-
-            if (sortKey === "agentTitle") {
-                const av = (a?.agentTitle ?? "").toLowerCase();
-                const bv = (b?.agentTitle ?? "").toLowerCase();
-                if (av < bv) return -1 * dir;
-                if (av > bv) return 1 * dir;
-                return 0;
-            }
-
-            if (sortKey === "agentTag") {
-                const av = (a?.agentTag ?? "").toLowerCase();
-                const bv = (b?.agentTag ?? "").toLowerCase();
-                if (av < bv) return -1 * dir;
-                if (av > bv) return 1 * dir;
-                return 0;
-            }
-
-            if (sortKey === "developer") {
-                const av = (a?.lastUpdatedByName ?? "").toLowerCase();
-                const bv = (b?.lastUpdatedByName ?? "").toLowerCase();
-                if (av < bv) return -1 * dir;
-                if (av > bv) return 1 * dir;
-                return 0;
-            }
-
-            if (sortKey === "modified") {
-                const av = Number(a?.agentVersion ?? 0);
-                const bv = Number(b?.agentVersion ?? 0);
-                return (av - bv) * dir;
-            }
-
-            const av = a?.isIndexed ? 1 : 0;
-            const bv = b?.isIndexed ? 1 : 0;
-            return (av - bv) * dir;
-        });
-    }, [agents, titleFilter, onlyUnindexed, sortDir, sortKey]);
-
-    const paging = useClientPaging("agents", filtered, { hasMore, loadMore });
+    const paging = useClientPaging("agents", filtered, { pageSize: 25, hasMore, loadMore });
 
     const onRefresh = () => {
         paging.first();
         void reload();
-    };
-
-    const toggleSort = (key: SortKey) => {
-        setSortKey((prev) => {
-            if (prev !== key) {
-                setSortDir("asc");
-                return key;
-            }
-            setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-            return key;
-        });
     };
 
     const onOpen = (item: AgentItemModel) => {
@@ -139,12 +91,12 @@ export default function AgentsModule() {
     };
 
     const sortHead = (key: SortKey, label: string, className = "") => (
-        <TableHead className={className} aria-sort={ariaSort(sortKey === key, sortDir)}>
+        <TableHead className={className} aria-sort={sort.ariaSort(key)}>
             <SortHeaderButton
                 label={label}
-                active={sortKey === key}
-                dir={sortDir}
-                onClick={() => toggleSort(key)}
+                active={sort.key === key}
+                dir={sort.dir}
+                onClick={() => sort.toggle(key)}
             />
         </TableHead>
     );
@@ -171,9 +123,10 @@ export default function AgentsModule() {
             <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
                     <Input
-                        placeholder={uiText("placeholder.filterByTitle")}
-                        value={titleFilter}
-                        onChange={(e) => setTitleFilter(e.target.value)}
+                        aria-label="Filter agents"
+                        placeholder={uiText("placeholder.filterAgentList")}
+                        value={filter}
+                        onChange={(e) => setFilter(e.target.value)}
                         className="w-64"
                     />
                     {unindexedCount > 0 && (
@@ -219,7 +172,10 @@ export default function AgentsModule() {
                                         colSpan={6}
                                         className="py-10 text-center text-muted-foreground"
                                     >
-                                        {error ?? uiText("empty.agents")}
+                                        {error ??
+                                            (agents.length
+                                                ? uiText("empty.filtered")
+                                                : uiText("empty.agents"))}
                                     </TableCell>
                                 </TableRow>
                             )}

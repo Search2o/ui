@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://search2o.com">
-    <img src="https://search2o.com/images/og5.png" alt="Search2o: a platform to build, run, and use AI agents, with a search interface" width="600">
+    <img src="https://search2o.com/images/og6.png" alt="Search2o: a platform to build, run, and use AI agents, with a search interface" width="600">
   </a>
 </p>
 
@@ -14,7 +14,7 @@ Many parts of this UI were generated with AI, against the agent server's REST AP
 
 The UI needs a running Search2o Agent Server. Install and start one first, following the [agent server's Getting started](https://github.com/Search2o/agent-server#getting-started).
 
-You need Node.js 24, or 22.12 or newer.
+You need Node.js 22.18 or newer.
 
 ```bash
 npm install

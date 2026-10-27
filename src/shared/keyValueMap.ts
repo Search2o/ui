@@ -55,6 +55,12 @@ export function rowsToTextMap(rows: KeyValueRow[]): Record<string, string> | und
     return Object.keys(out).length ? out : undefined;
 }
 
+export function rowValueFields(rows: KeyValueRow[], noun: string) {
+    return rows
+        .filter((row) => row.key.trim())
+        .map((row) => ({ label: `${noun} “${row.key.trim()}”`, value: row.value }));
+}
+
 export function rowsSnapshot(rows: KeyValueRow[]): [string, string, boolean][] {
     return rows.map((row) => [row.key, row.value, row.override]);
 }

@@ -1,10 +1,12 @@
 import { XCircle } from "lucide-react";
 import type { ValidationResult } from "@/orval/search2o.schemas";
 import { HoverTip } from "@/shared/HoverTip";
+import { promptErrorTarget } from "@/shared/agentPrompts";
 
 const KIND_LABEL: Record<string, string> = {
     secret: "Secret",
     allowlistItem: "Allowlist item",
+    constItem: "Const item",
 };
 
 export function ValidationErrors({
@@ -41,7 +43,7 @@ export function ValidationErrors({
                                         <span className="font-mono">
                                             at{" "}
                                             <HoverTip
-                                                tip={`${err.path} — click to show it in the definition`}
+                                                tip={`${err.path} — click to show it in the ${promptErrorTarget(err.path) ? "prompts" : "definition"}`}
                                             >
                                                 <button
                                                     type="button"

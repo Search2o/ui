@@ -3,9 +3,9 @@ import * as UI from "@/shared/uistate";
 import { BackButton } from "@/shared/BackButton";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Search } from "lucide-react";
+import { SendHorizontal } from "lucide-react";
+import { Composer } from "@/shared/Composer";
 import { UpdatedBy } from "@/shared/UpdatedBy";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
 import { uiText } from "@/shared/uiText";
@@ -38,47 +38,42 @@ export default function AgentRunModule() {
         [canSubmit, handleSubmit],
     );
 
+    const title = payload?.agentTitle ? `${payload.agentTitle} (${agentName})` : agentName;
+
     return (
-        <div className="grid gap-4 p-4">
-            <Card className="shadow-sm">
-                <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2 space-y-0">
-                    <div className="space-y-1">
-                        <ModuleCardTitle
-                            title={`${payload?.agentTitle ?? ""} (${agentName})`}
-                            help="agent-run"
-                        />
-                        <UpdatedBy obj={payload} />
-                    </div>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+                <div className="min-w-0 space-y-1">
+                    <ModuleCardTitle title={title} help="agent-run" />
+                    <UpdatedBy obj={payload} />
+                </div>
 
-                    <BackButton fallback="Agents" />
-                </CardHeader>
+                <BackButton fallback="Agents" />
+            </CardHeader>
 
-                <CardContent className="space-y-3">
-                    <div className="relative">
-                        <Textarea
-                            id="searchbox3"
-                            aria-label="Agent query input"
-                            placeholder={uiText("placeholder.agentRunQuery")}
-                            rows={4}
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            onKeyDown={onKeyDown}
-                            className="pr-12"
-                        />
+            <CardContent>
+                <Composer
+                    id="searchbox3"
+                    aria-label="Agent query input"
+                    placeholder={uiText("placeholder.agentRunQuery")}
+                    rows={2}
+                    className="min-h-[64px] text-base leading-relaxed"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={onKeyDown}
+                    action={
                         <Button
                             type="button"
-                            size="icon"
-                            variant="secondary"
-                            aria-label="Run query"
+                            size="sm"
                             onClick={handleSubmit}
                             disabled={!canSubmit}
-                            className="absolute bottom-2 right-2"
                         >
-                            <Search className="size-4" />
+                            <SendHorizontal className="h-4 w-4" aria-hidden />
+                            Send
                         </Button>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
+                    }
+                />
+            </CardContent>
+        </Card>
     );
 }

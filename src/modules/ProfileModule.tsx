@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "@/shared/useSession";
 import * as API from "@/orval/search2o";
 import type { ThemeType, UserProfileModel } from "@/orval/search2o.schemas";
@@ -22,6 +22,8 @@ import { Save } from "lucide-react";
 import { ModuleCardTitle } from "@/shared/ModuleCardTitle";
 import { IntegrationTokens } from "@/shared/IntegrationTokens";
 import { uiText } from "@/shared/uiText";
+import { useUnsavedChanges } from "@/shared/useUnsavedChanges";
+import { roleLabel } from "@/shared/roleLabels";
 
 export default function ProfileModule() {
     const { setTheme, user, setUser } = useSession();
@@ -36,6 +38,7 @@ export default function ProfileModule() {
     const [nameDraft, setNameDraft] = useState("");
     const [tokenMaxAgeDays, setTokenMaxAgeDays] = useState<number | null | undefined>(undefined);
     const [themeDraft, setThemeDraft] = useState<ThemeType>("system");
+    const [saved, setSaved] = useState<{ name: string; theme: ThemeType } | null>(null);
 
     const isPlainUser = user?.role === "user";
     const canSaveProfile = nameDraft.trim().length > 0 && !saving;
@@ -62,6 +65,10 @@ export default function ProfileModule() {
             setUser(nextUser);
             setNameDraft(nextUser.userName ?? "");
             setThemeDraft(nextUser.uiPref?.theme ?? "system");
+            setSaved({
+                name: nextUser.userName ?? "",
+                theme: nextUser.uiPref?.theme ?? "system",
+            });
             if (nextUser.uiPref?.theme) setTheme(nextUser.uiPref.theme);
         } catch {
             toast.error("Unable to load profile");
@@ -79,8 +86,8 @@ export default function ProfileModule() {
         setTheme(nextTheme);
     }
 
-    async function handleSaveProfile() {
-        if (!user) return;
+    async function handleSaveProfile(): Promise<boolean> {
+        if (!user) return false;
         try {
             setSaving(true);
             const resp = await API.updateUserProfile({
@@ -89,12 +96,14 @@ export default function ProfileModule() {
             });
             if (resp?.success === false) {
                 toast.error(resp.error?.message || "Failed to update profile");
-                return;
+                return false;
             }
             await loadProfile();
             toast.success("Profile updated");
+            return true;
         } catch {
             toast.error("Failed to update profile");
+            return false;
         } finally {
             setSaving(false);
         }
@@ -124,6 +133,23 @@ export default function ProfileModule() {
             setPwdSaving(false);
         }
     }
+
+    const profileDirty =
+        saved !== null && (nameDraft.trim() !== saved.name || themeDraft !== saved.theme);
+    const { dialog: unsavedDialog } = useUnsavedChanges({
+        isDirty: () => profileDirty || pwdOld !== "" || pwdNew !== "",
+        onSave: !pwdOld && !pwdNew && canSaveProfile ? handleSaveProfile : undefined,
+        what: "page",
+    });
+
+    const themeOnLeave = useRef<ThemeType | null>(null);
+    themeOnLeave.current = saved && themeDraft !== saved.theme ? saved.theme : null;
+    useEffect(
+        () => () => {
+            if (themeOnLeave.current) setTheme(themeOnLeave.current);
+        },
+        [setTheme],
+    );
 
     return (
         <div className="w-full grid gap-6">
@@ -157,7 +183,7 @@ export default function ProfileModule() {
                         {!isPlainUser && (
                             <div className="grid gap-2">
                                 <Label htmlFor="role">Role</Label>
-                                <Input id="role" value={user?.role ?? ""} readOnly disabled />
+                                <Input id="role" value={roleLabel(user?.role)} readOnly disabled />
                             </div>
                         )}
                     </div>
@@ -165,7 +191,7 @@ export default function ProfileModule() {
                     <Separator />
 
                     <div className="grid gap-3">
-                        <h3 className="text-base font-medium">UI Preferences</h3>
+                        <h3 className="text-base font-medium">UI preferences</h3>
                         <div className="grid max-w-4xl gap-5 md:grid-cols-2">
                             <div className="grid gap-2">
                                 <Label htmlFor="theme">Theme</Label>
@@ -201,7 +227,7 @@ export default function ProfileModule() {
 
             <Card className="shadow-sm">
                 <CardHeader>
-                    <CardTitle>Change Password</CardTitle>
+                    <CardTitle>Change password</CardTitle>
                     <CardDescription>Update your account password.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-5">
@@ -242,6 +268,7 @@ export default function ProfileModule() {
             </Card>
 
             <IntegrationTokens maxAgeDays={tokenMaxAgeDays} />
+            {unsavedDialog}
         </div>
     );
 }

@@ -48,7 +48,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { errorText } from "@/shared/apiError";
 import { uiText } from "@/shared/uiText";
-import { MAX_LENGTHS } from "@/shared/schemaRules";
+import { EXPR_TEXT, MAX_LENGTHS, textFieldsError } from "@/shared/schemaRules";
 
 type EditableDbProfile = DbConnectionModel & {
     uiId: string;
@@ -72,6 +72,7 @@ function makeDefaultPool(): DbConnectionPool {
         poolRecycle: -1,
         poolPrePing: false,
         maxOverflow: 10,
+        idleTimeout: 300,
         connectArgs: {},
     };
 }
@@ -93,6 +94,7 @@ function itemToEditable(item: AgentConfigPartRowModel): EditableDbProfile {
         name: profile.name,
         doc: profile.doc ?? "",
         connectionString: profile.connectionString ?? "",
+        poolKey: profile.poolKey ?? "",
         connectionPool: pool,
         connectArgsText: jsonPretty(pool.connectArgs),
         connectArgsError: undefined,
@@ -109,6 +111,7 @@ function editableToProfile(profile: EditableDbProfile): DbConnectionModel {
         name: profile.name.trim(),
         type: "db",
         connectionString: profile.connectionString ?? "",
+        poolKey: profile.poolKey?.trim() ? profile.poolKey : null,
         connectionPool: profile.connectionPool ?? makeDefaultPool(),
         doc: profile.doc ?? "",
     };
@@ -225,6 +228,29 @@ function PoolEditor(props: {
                 />
             </div>
 
+            <div className="grid gap-2">
+                <FieldLabel help={fh("idleTimeout")} htmlFor={`${idPrefix}-idleTimeout`}>
+                    Idle timeout (sec)
+                </FieldLabel>
+                <Input
+                    id={`${idPrefix}-idleTimeout`}
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={pool.idleTimeout ?? ""}
+                    placeholder="300"
+                    onChange={(e) =>
+                        updatePool(
+                            "idleTimeout",
+                            e.target.value === ""
+                                ? undefined
+                                : Math.max(0, Math.floor(Number(e.target.value))),
+                        )
+                    }
+                    disabled={disabled}
+                />
+            </div>
+
             <div className="grid gap-2 md:col-span-3">
                 <div className="flex items-center gap-2">
                     <Checkbox
@@ -276,6 +302,7 @@ export default function DbConfigDetailModule() {
                 source: { name: "", type: "db" },
                 name: "",
                 connectionString: "",
+                poolKey: "",
                 connectionPool: makeDefaultPool(),
                 connectArgsText: jsonPretty(makeDefaultPool().connectArgs),
                 usedBy: [],
@@ -396,6 +423,15 @@ export default function DbConfigDetailModule() {
 
         if (!(profile.connectionString ?? "").trim()) {
             toast.error("Connection string is required");
+            return false;
+        }
+
+        const text = textFieldsError(EXPR_TEXT, [
+            { label: "The connection string", value: profile.connectionString },
+            { label: "The pool key", value: profile.poolKey },
+        ]);
+        if (text) {
+            toast.error(text);
             return false;
         }
 
@@ -580,7 +616,7 @@ export default function DbConfigDetailModule() {
                 </CardHeader>
 
                 <CardContent className="p-0">
-                    <div className="space-y-4 px-4 pb-4">
+                    <div className="space-y-4 px-6 pb-4">
                         <Card className="rounded-2xl border bg-card shadow-none">
                             <CardHeader>
                                 <CardTitle>Connection</CardTitle>
@@ -608,6 +644,37 @@ export default function DbConfigDetailModule() {
                                             }
                                             className={
                                                 dynamic.field("connectionString")
+                                                    ? DYNAMIC_FIELD_INPUT_CLASS
+                                                    : undefined
+                                            }
+                                            disabled={profile.isSaving || profile.isDeleting}
+                                        />
+                                    </HoverTip>
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <FieldLabel
+                                        help={fh("poolKey")}
+                                        htmlFor={`profile-${index}-pool-key`}
+                                    >
+                                        Pool key
+                                    </FieldLabel>
+                                    <HoverTip
+                                        tip={
+                                            dynamic.field("poolKey")
+                                                ? dynamicFieldTitle()
+                                                : undefined
+                                        }
+                                    >
+                                        <WrappingInput
+                                            id={`profile-${index}-pool-key`}
+                                            value={profile.poolKey ?? ""}
+                                            onValueChange={(value) =>
+                                                updateProfileField(index, "poolKey", value)
+                                            }
+                                            placeholder={uiText("placeholder.sharedPool")}
+                                            className={
+                                                dynamic.field("poolKey")
                                                     ? DYNAMIC_FIELD_INPUT_CLASS
                                                     : undefined
                                             }
@@ -659,7 +726,7 @@ export default function DbConfigDetailModule() {
                                 <Trash2 className="h-4 w-4" />
                                 Delete
                             </Button>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="order-last basis-full text-xs text-muted-foreground sm:order-none sm:basis-auto">
                                 {isUsed
                                     ? uiText("delete.dbInUse")
                                     : uiText("delete.cannotBeUndone")}

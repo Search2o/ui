@@ -34,10 +34,22 @@ export const PROFILE_NAME: NameRule = {
     source: ["LlmModel", "name"],
 };
 
+export const PROMPT_NAME: NameRule = {
+    pattern: "^[A-Za-z][A-Za-z0-9_]*[A-Za-z0-9]$",
+    maxLength: 100,
+    source: ["SaveDraftAgentModel", "agentPrompts", "key"],
+};
+
 export const SERVICE_ACCOUNT_NAME: NameRule = {
     pattern: "^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?$",
     maxLength: 64,
     source: ["CreateServiceAccountModel", "name"],
+};
+
+export const ENCRYPTION_KEY_NAME: NameRule = {
+    pattern: "^[A-Za-z0-9](?:[A-Za-z0-9_.:/-]*[A-Za-z0-9])?$",
+    maxLength: 256,
+    source: ["EncryptionKey", "keyName"],
 };
 
 export const IMPORT_PATH: NameRule = {
@@ -46,13 +58,47 @@ export const IMPORT_PATH: NameRule = {
     source: ["HooksModel", "onStart"],
 };
 
+export type TextRule = { pattern: string; maxLength?: number; schema: string };
+
+const EXPR_PATTERN = "^(?:\\{[\\x20-\\x7E\\t\\r\\n]*\\}|[^{][\\s\\S]*|\\{(?:[\\s\\S]*[^}])?|)$";
+
+export const EXPR_TEXT: TextRule = { pattern: EXPR_PATTERN, maxLength: 5000, schema: "ExprString" };
+
+export const PROMPT_TEXT: TextRule = { pattern: EXPR_PATTERN, schema: "PromptText" };
+
+export const ALL_TEXT_RULES: Record<string, TextRule> = { EXPR_TEXT, PROMPT_TEXT };
+
+export const EXPR_CHARACTERS_RULE =
+    "is an expression carrying a character that cannot be typed on a keyboard — a curly quote or a non-breaking space, usually pasted from a document";
+
+export function textRuleProblem(rule: TextRule, value: string): string | null {
+    if (rule.maxLength !== undefined && [...value].length > rule.maxLength) {
+        return `is longer than ${rule.maxLength.toLocaleString("en-US")} characters`;
+    }
+    if (!new RegExp(rule.pattern).test(value)) return EXPR_CHARACTERS_RULE;
+    return null;
+}
+
+export function textFieldsError(
+    rule: TextRule,
+    fields: { label: string; value: string | null | undefined }[],
+): string | null {
+    for (const { label, value } of fields) {
+        const problem = value ? textRuleProblem(rule, value) : null;
+        if (problem) return `${label} ${problem}.`;
+    }
+    return null;
+}
+
 export const ALL_RULES: Record<string, NameRule> = {
     AGENT_NAME,
     AGENT_TAG,
     MCP_SERVER_NAME,
     POOL_NAME,
     PROFILE_NAME,
+    PROMPT_NAME,
     SERVICE_ACCOUNT_NAME,
+    ENCRYPTION_KEY_NAME,
     IMPORT_PATH,
 };
 
@@ -68,6 +114,7 @@ export const MAX_LENGTHS: Record<string, { max: number; source: [string, string]
     AGENT_DESCRIPTION: { max: 5000, source: ["DescriptorModel", "description"] },
     CONVERSATION_TITLE: { max: 200, source: ["SetConversationTitleModel", "title"] },
     PROFILE_DOC: { max: 500, source: ["LlmModel", "doc"] },
+    AGENT_CONST: { max: 50000, source: ["SaveDraftAgentModel", "const"] },
     AGENT_TAG: { max: 16, source: ["UpdateTagModel", "agentTag"] },
     MCP_SERVER_NAME: { max: 16, source: ["McpServerModel", "name"] },
     DRAFT_HELP_PROMPT: { max: 10000, source: ["DraftHelpModel", "userPrompt"] },

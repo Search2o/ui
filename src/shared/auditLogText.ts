@@ -118,13 +118,32 @@ export type AuditEntryText = {
     showUser: boolean;
 };
 
+const RETIRED_PROMPT_UPDATED = "promptUpdated";
+
+const PUBLISHED_FIELDS: Record<string, string> = {
+    agentDefinition: "definition",
+    agentTitle: "title",
+    maxTime: "max time",
+    maxCost: "max cost",
+    const: "const",
+};
+
+function publishedFieldLabel(field: string): string {
+    const prompt = /^agentPrompts\.(.+)$/.exec(field);
+    if (prompt) return `prompt ${quoted(prompt[1])}`;
+    return PUBLISHED_FIELDS[field] ?? labelForType(field).toLowerCase();
+}
+
 export function describeAuditEntry(n: AuditLogModel): AuditEntryText {
     const data: Data = n.data ?? {};
-    const type = n.entryType ?? null;
+    const type = (n.entryType ?? null) as
+        AuditLogModel["entryType"] | typeof RETIRED_PROMPT_UPDATED;
 
     const details: string[] = [];
     const part = (scalar(data.part) ?? type ?? "").toLowerCase();
-    const fields = list(data.fields).filter((f) => !part.endsWith(f.toLowerCase()));
+    const fields = list(data.fields)
+        .filter((f) => !part.endsWith(f.toLowerCase()))
+        .map((f) => (type === "agentPublished" ? publishedFieldLabel(f) : f));
     const added = list(data.added);
     const removed = list(data.removed);
     const reason = scalar(data.reason);
@@ -191,6 +210,24 @@ export function describeAuditEntry(n: AuditLogModel): AuditEntryText {
                     return `${agentPhrase(data)} run limits changed from ${from} to ${to}`;
                 if (to) return `${agentPhrase(data)} run limits set to ${to}`;
                 return `${agentPhrase(data)} run limits changed`;
+            }
+            case RETIRED_PROMPT_UPDATED: {
+                const name = scalar(data.name);
+                const agent = scalar(data.agent);
+                const prompt = name ? `Prompt ${quoted(name)}` : "A prompt";
+                const action = scalar(data.action);
+                if (!agent) return `${prompt} ${actionVerb(action, false)}`;
+                if (action === "created") return `${prompt} was added to ${quoted(agent)}`;
+                if (action === "deleted") return `${prompt} was deleted from ${quoted(agent)}`;
+                return `${prompt} of ${quoted(agent)} was updated`;
+            }
+            case "agentPublished":
+                return scalar(data.action) === "created"
+                    ? `${agentPhrase(data)} was published for the first time`
+                    : `${agentPhrase(data)} was published`;
+            case "promptsUpdated": {
+                const agent = scalar(data.agent);
+                return agent ? `Prompts of ${quoted(agent)} were updated` : "Prompts were updated";
             }
             case "tagUpdated":
             case "titleUpdated": {

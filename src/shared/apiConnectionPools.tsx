@@ -37,7 +37,7 @@ export function ConnectionPoolNameField({
             <FieldLabel help={help} htmlFor={id}>
                 {label}
             </FieldLabel>
-            <Select value={current || undefined} onValueChange={onChange} disabled={disabled}>
+            <Select value={current ?? ""} onValueChange={onChange} disabled={disabled}>
                 <SelectTrigger
                     id={id}
                     className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate"

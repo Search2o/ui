@@ -87,7 +87,7 @@ export function KeyValueRows({
                     {rows.map((row) => (
                         <div
                             key={row.id}
-                            className="flex flex-col items-start gap-2 md:flex-row md:items-center"
+                            className="flex flex-col items-start gap-2 rounded-lg border p-2 md:flex-row md:items-center md:rounded-none md:border-0 md:p-0"
                         >
                             <Input
                                 className="w-full md:w-1/3"
@@ -128,7 +128,7 @@ export function KeyValueRows({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="shrink-0"
+                                className="shrink-0 self-end md:self-auto"
                                 onClick={() => onChange(rows.filter((r) => r.id !== row.id))}
                                 aria-label={`Remove ${row.key.trim() || label.toLowerCase()}`}
                                 disabled={disabled}
